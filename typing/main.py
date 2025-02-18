@@ -70,30 +70,18 @@ def load_template(template_path: str) -> str:
     """HTML 템플릿 파일을 로드합니다."""
     return Path(template_path).read_text(encoding='utf-8')
 
-def load_default_sentences() -> List[str]:
-    """기본 연습 문장들을 로드합니다."""
-    return [
-        "타이핑 연습을 하는 어플입니다.",
-        "문장을 연습할 문장을 넣어주세요.",
-        "한 문장씩 연습할 수 있습니다."
-    ]
-
 def process_input_text(text: str) -> List[str]:
     """입력된 텍스트를 문장 리스트로 변환합니다."""
-    # 빈 줄 제거하고 각 줄을 문장으로 처리
-    sentences = [line.strip() for line in text.split('\n') if line.strip()]
-    return sentences
+    return [line.strip() for line in text.split('\n') if line.strip()]
 
 def load_javascript() -> str:
     """JavaScript 코드를 별도 파일에서 로드합니다."""
     return Path('static/typing.js').read_text(encoding='utf-8')
 
 def load_styles():
-    """스타일 로드"""
-    # CSS 파일 로드
+    """스타일을 로드합니다."""
     css_content = Path('static/styles.css').read_text()
     
-    # CSS 변수 설정
     css_vars = f"""
     <style>
     :root {{
@@ -122,16 +110,17 @@ def initialize_session_state():
     if 'stats' not in st.session_state:
         st.session_state.stats = TypingStats()
     if 'current_sentences' not in st.session_state:
-        st.session_state.current_sentences = process_input_text(get_default_text())
+        st.session_state.current_sentences = []
     if 'total_sentences_completed' not in st.session_state:
         st.session_state.total_sentences_completed = 0
     if 'current_input_method' not in st.session_state:
         st.session_state.current_input_method = INPUT_MODES["default"]
+    if 'practice_started' not in st.session_state:
+        st.session_state.practice_started = False
     
     # TypingManager 추가
     if 'typing_manager' not in st.session_state:
         manager = TypingManager()
-        # 기존 상태와 동기화
         if 'current_sentences' in st.session_state:
             manager.current_sentences = st.session_state.current_sentences
             manager.current_index = st.session_state.current_sentence_index
@@ -285,9 +274,7 @@ def generate_practice_sentences(language: str, num_sentences: int = 4) -> List[s
 
 def get_default_text() -> str:
     """기본 연습 문장들을 문자열로 반환합니다."""
-    return """타이핑 연습을 하는 어플입니다.
-문장을 연습할 문장을 넣어주세요.
-한 문장씩 연습할 수 있습니다."""
+    return DEFAULT_SENTENCES
 
 def main():
     st.set_page_config(layout=UI_CONFIG["page_layout"])
@@ -310,8 +297,8 @@ def main():
         st.session_state.input_key = 0
         st.session_state.stats = TypingStats()
         st.session_state.total_sentences_completed = 0
-        if 'current_sentences' in st.session_state:
-            del st.session_state.current_sentences
+        st.session_state.current_sentences = []
+        st.session_state.practice_started = False
 
     # 각 모드별 설정
     sentences = []  # 초기화
@@ -319,36 +306,24 @@ def main():
     if input_method == "직접 입력":
         text_input = st.sidebar.text_area(
             "연습할 텍스트를 입력하세요 (각 줄이 하나의 문장이 됩니다)",
-            value=get_default_text(),
+            value=DEFAULT_SENTENCES,
             height=UI_CONFIG["text_area_height"]
         )
-        
-        if 'current_sentences' not in st.session_state:
-            display_welcome_message(input_method)
-        else:
-            sentences = st.session_state.current_sentences
 
     elif input_method == "AI 생성 문장":
-        language = st.sidebar.selectbox(
+        language = st.sidebar.radio(
             "언어 선택",
             AI_CONFIG["languages"],
             index=AI_CONFIG["languages"].index(AI_CONFIG["default_language"])
         )
-        st.session_state.current_language = language
-        
-        if 'current_sentences' not in st.session_state:
-            display_welcome_message(input_method)
-        else:
-            sentences = st.session_state.current_sentences
 
     elif input_method == "파일 업로드":
-        # 파일 업로더를 한 줄로 표시
         uploaded_file = st.sidebar.file_uploader(
             "텍스트 파일(.txt)",
-            type=FILE_CONFIG["allowed_types"]
+            type=FILE_CONFIG["allowed_types"],
+            key="file_uploader"
         )
 
-        # 시작 위치와 문장 수를 한 줄에 배치
         col1, col2 = st.sidebar.columns(2)
         with col1:
             start_line = st.number_input(
@@ -371,26 +346,14 @@ def main():
             )
             st.caption("문장 수")
 
-        if 'current_sentences' not in st.session_state:
-            display_welcome_message(input_method)
-
-        if 'current_sentences' in st.session_state:
-            sentences = st.session_state.current_sentences
-
     # 공통 연습 시작 버튼
     st.sidebar.markdown("---")
     if st.sidebar.button("연습 시작", use_container_width=True):
-        # 진행률 초기화
-        st.session_state.current_sentence_index = 0
-        st.session_state.input_key = 0
-        st.session_state.stats = TypingStats()
-        st.session_state.total_sentences_completed = 0
-
         if input_method == "직접 입력":
             if text_input:
                 sentences = process_input_text(text_input)
-                st.session_state.current_text = text_input
                 st.session_state.current_sentences = sentences
+                st.session_state.practice_started = True
             else:
                 st.sidebar.warning("텍스트를 입력해주세요.")
                 return
@@ -399,6 +362,7 @@ def main():
             with st.spinner(f"{language} 문장을 생성하는 중..."):
                 sentences = generate_practice_sentences(language, num_sentences=5)
                 st.session_state.current_sentences = sentences
+                st.session_state.practice_started = True
 
         else:  # 파일 업로드
             if not uploaded_file:
@@ -409,31 +373,31 @@ def main():
             all_sentences = process_input_text(text_content)
             start_line = min(start_line, len(all_sentences))
             
-            st.session_state.current_file = uploaded_file.name
-            st.session_state.start_line = start_line
-            st.session_state.lines_per_set = lines_per_set
-            
             end_line = start_line + lines_per_set
             sentences = all_sentences[start_line:end_line]
             st.session_state.current_sentences = sentences
-            st.session_state.remaining_sentences = all_sentences[end_line:]
+            st.session_state.practice_started = True
 
-    # 문장이 비어있으면 나머지 UI를 표시하지 않음
+        # 공통 초기화
+        st.session_state.current_sentence_index = 0
+        st.session_state.input_key = 0
+        st.session_state.stats = TypingStats()
+        st.session_state.total_sentences_completed = 0
+
+    # 연습이 시작되지 않았으면 환영 메시지만 표시
+    if not st.session_state.practice_started:
+        display_welcome_message(input_method)
+        return
+
+    # 연습이 시작되었으면 타이핑 UI 표시
+    sentences = st.session_state.current_sentences
     if not sentences:
         return
 
-    # 인덱스가 범위를 벗어났는지 확인
-    if st.session_state.current_sentence_index >= len(sentences):
-        st.session_state.current_sentence_index = 0
-
     current_sentence = sentences[st.session_state.current_sentence_index]
-    
-    # 현재 문장 표시
     display_sentence(current_sentence)
-    
-    # 통계 표시
     display_stats(st.session_state.stats.to_dict(), len(sentences))
-        
+    
     # 사이드바에 현재 진행 상황 표시
     st.sidebar.markdown("---")
     st.sidebar.markdown(f"**현재 진행 상황**")
