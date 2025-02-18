@@ -10,6 +10,35 @@ class WordStats:
     correct: int = 0
     incorrect: int = 0
 
+    def update(self, input_words: List[str], target_words: List[str]) -> None:
+        """단어 통계를 업데이트합니다."""
+        self.total += len(target_words)
+        
+        for i, word in enumerate(input_words):
+            if i < len(target_words):
+                if word == target_words[i]:
+                    self.correct += 1
+                else:
+                    self.incorrect += 1
+            else:
+                self.incorrect += 1
+        
+        if len(input_words) < len(target_words):
+            self.incorrect += (len(target_words) - len(input_words))
+
+    def reset(self) -> None:
+        """통계를 초기화합니다."""
+        self.total = 0
+        self.correct = 0
+        self.incorrect = 0
+
+    @property
+    def accuracy(self) -> float:
+        """정확도를 계산합니다."""
+        if self.total == 0:
+            return 0.0
+        return round((self.correct / self.total) * 100, 1)
+
 class TypingStats:
     """타이핑 통계를 관리하는 클래스"""
     def __init__(self):
@@ -26,21 +55,7 @@ class TypingStats:
         # 다음 문장을 위한 시작 시간 초기화
         self.start_time = time.time()
         
-        self.word_stats.total += len(target_words)
-        
-        # 입력된 단어 체크
-        for i, word in enumerate(input_words):
-            if i < len(target_words):
-                if word == target_words[i]:
-                    self.word_stats.correct += 1
-                else:
-                    self.word_stats.incorrect += 1
-            else:
-                self.word_stats.incorrect += 1
-        
-        # 누락된 단어 처리
-        if len(input_words) < len(target_words):
-            self.word_stats.incorrect += (len(target_words) - len(input_words))
+        self.word_stats.update(input_words, target_words)
 
     def get_wpm(self) -> float:
         """평균 분당 타자 속도를 계산합니다."""
@@ -59,12 +74,13 @@ class TypingStats:
             'total_words': self.word_stats.total,
             'correct_words': self.word_stats.correct,
             'incorrect_words': self.word_stats.incorrect,
-            'wpm': self.get_wpm()
+            'wpm': self.get_wpm(),
+            'accuracy': self.word_stats.accuracy
         }
 
     def reset(self) -> None:
         """통계를 초기화합니다."""
-        self.word_stats = WordStats()
+        self.word_stats.reset()
         self.start_time = time.time()
         self.elapsed_times = []
 
@@ -116,17 +132,17 @@ class TypingManager:
             return False
 
         next_index = self.current_index + 1
+        is_set_completed = next_index >= len(self.current_sentences)
         
-        # AI 생성 문장 모드에서 마지막 문장 완료 시
-        if (hasattr(self, 'current_input_method') and 
-            self.current_input_method == "AI 생성 문장" and 
-            next_index >= len(self.current_sentences)):
+        # 현재 세트 완료 처리
+        if is_set_completed:
             self.total_sentences_completed += len(self.current_sentences)
-            return True  # AI 모드의 경우 새로운 문장 생성이 필요함을 알림
-
-        # 일반적인 경우
-        if next_index >= len(self.current_sentences):
-            self.total_sentences_completed += len(self.current_sentences)
+            
+            # AI 생성 문장 모드인 경우
+            if self.current_input_method == "AI 생성 문장":
+                return True  # 새로운 문장 생성이 필요함을 알림
+            
+            # 일반 모드인 경우
             self.current_index = 0
         else:
             self.current_index = next_index
@@ -145,6 +161,7 @@ class TypingManager:
         self.reset_session()
         self.current_sentences = []
         self.total_sentences_completed = 0
+        self.current_input_method = ""
 
     def get_progress(self) -> Dict[str, int]:
         """현재 진행 상황을 반환합니다."""

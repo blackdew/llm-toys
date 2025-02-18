@@ -58,12 +58,19 @@ class TypingStats:
             
         return round(self.total_words / total_time_minutes, 1)
 
-    def to_dict(self) -> Dict[str, int]:
+    def get_accuracy(self) -> float:
+        """정확도를 계산합니다."""
+        if self.total_words == 0:
+            return 0.0
+        return round((self.correct_words / self.total_words) * 100, 1)
+
+    def to_dict(self) -> Dict[str, float]:
         return {
             'total_words': self.total_words,
             'correct_words': self.correct_words,
             'incorrect_words': self.incorrect_words,
-            'wpm': self.get_wpm()
+            'wpm': self.get_wpm(),
+            'accuracy': self.get_accuracy()
         }
 
 def load_template(template_path: str) -> str:
@@ -135,7 +142,7 @@ def initialize_session_state():
 
 def display_stats(stats: Dict, current_sentences: int):
     """통계를 표시합니다."""
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
     with col1:
         current_progress = st.session_state.current_sentence_index + 1 + st.session_state.total_sentences_completed
         total_sentences = current_sentences + st.session_state.total_sentences_completed
@@ -148,6 +155,8 @@ def display_stats(stats: Dict, current_sentences: int):
         st.markdown(f"**틀린 단어:** {stats['incorrect_words']}")
     with col5:
         st.markdown(f"**타자 속도:** {stats['wpm']} WPM")
+    with col6:
+        st.markdown(f"**정확도:** {stats['accuracy']}%")
 
 def display_sentence(sentence: str):
     """현재 문장을 표시합니다."""
