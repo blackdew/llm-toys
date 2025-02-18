@@ -93,6 +93,11 @@ def initialize_session_state():
         st.session_state.stats = TypingStats()
     if 'current_sentences' not in st.session_state:
         st.session_state.current_sentences = process_input_text(get_default_text())
+    
+    # 인덱스가 범위를 벗어났는지 확인하고 수정
+    if (st.session_state.current_sentence_index >= len(st.session_state.current_sentences) or 
+        st.session_state.current_sentence_index < 0):
+        st.session_state.current_sentence_index = 0
 
 def display_stats(stats: TypingStats, total_sentences: int):
     """통계를 표시합니다."""
@@ -283,6 +288,12 @@ def main():
     if not sentences:
         st.sidebar.warning("텍스트가 비어있어 기본 문장을 사용합니다.")
         sentences = process_input_text(get_default_text())
+        st.session_state.current_sentences = sentences
+        st.session_state.current_sentence_index = 0
+
+    # 인덱스가 범위를 벗어났는지 확인
+    if st.session_state.current_sentence_index >= len(sentences):
+        st.session_state.current_sentence_index = 0
 
     current_sentence = sentences[st.session_state.current_sentence_index]
     
@@ -312,10 +323,12 @@ def main():
             
             const inputWords = cleanText(input.value).split(' ');
             
+            // 모든 단어 스타일 초기화
             words.forEach(word => {
                 word.classList.remove('correct', 'incorrect');
             });
             
+            // 입력된 단어 체크
             inputWords.forEach((word, i) => {
                 if (i < words.length) {
                     const targetWord = cleanText(words[i].textContent);
@@ -329,7 +342,8 @@ def main():
             });
         }
 
-        let lastInputValue = '';
+        let lastInputKey = '';
+        let currentInput = null;
 
         function setupTypingInput() {
             const doc = window.parent.document;
@@ -337,9 +351,10 @@ def main():
             
             if (!input) return;
             
-            // 새로운 입력창 감지 (value가 빈 문자열인 경우)
-            if (input.value === '' && lastInputValue !== '') {
-                lastInputValue = '';
+            // 새로운 입력창이 감지되면
+            if (input !== currentInput) {
+                currentInput = input;
+                lastInputKey = input.getAttribute('data-testid') || '';
                 
                 // 이벤트 리스너 설정
                 if (!input.dataset.hasTypingListener) {
@@ -355,20 +370,22 @@ def main():
                 }
                 
                 // 새 문장이 나타났을 때 포커스
-                setTimeout(() => input.focus(), 100);
+                setTimeout(() => {
+                    input.focus();
+                    checkTyping();
+                }, 100);
             }
-            
-            lastInputValue = input.value;
         }
 
         // 주기적으로 체크
         setInterval(() => {
-            checkTyping();
             setupTypingInput();
+            checkTyping();  // 실시간 체크 추가
         }, 100);
 
         // 초기 설정
         setupTypingInput();
+        checkTyping();
     </script>
     """
     
