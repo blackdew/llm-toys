@@ -54,33 +54,13 @@ def load_styles():
 
 def initialize_session_state():
     """세션 상태를 초기화합니다."""
-    if 'current_sentence_index' not in st.session_state:
-        st.session_state.current_sentence_index = 0
-    if 'input_key' not in st.session_state:
-        st.session_state.input_key = 0
-    if 'current_sentences' not in st.session_state:
-        st.session_state.current_sentences = []
-    if 'total_sentences_completed' not in st.session_state:
-        st.session_state.total_sentences_completed = 0
-    if 'current_input_method' not in st.session_state:
-        st.session_state.current_input_method = INPUT_MODES["default"]
-    if 'practice_started' not in st.session_state:
+    if 'typing_manager' not in st.session_state:
+        st.session_state.typing_manager = TypingManager()
+        st.session_state.typing_manager.set_input_method(INPUT_MODES["default"])
         st.session_state.practice_started = False
     
-    # TypingManager 추가
-    if 'typing_manager' not in st.session_state:
-        manager = TypingManager()
-        if 'current_sentences' in st.session_state:
-            manager.current_sentences = st.session_state.current_sentences
-            manager.current_index = st.session_state.current_sentence_index
-            manager.total_sentences_completed = st.session_state.total_sentences_completed
-            manager.input_key = st.session_state.input_key
-        st.session_state.typing_manager = manager
-
-    # 인덱스가 범위를 벗어났는지 확인하고 수정
-    if (st.session_state.current_sentence_index >= len(st.session_state.current_sentences) or 
-        st.session_state.current_sentence_index < 0):
-        st.session_state.current_sentence_index = 0
+    # 나머지 상태는 typing_manager에서 관리
+    update_session_state(st.session_state.typing_manager)
 
 def display_progress(current_index: int, total_completed: int, total_sentences: int):
     """진행 상황을 표시합니다."""
@@ -129,7 +109,10 @@ def display_sentence(sentence: str):
         for i, word in enumerate(sentence.split())
     ])
     st.markdown(
-        f'<div class="{CSS_CLASSES["target_text"]}">{words_html}</div>', 
+        f'<div class="{CSS_CLASSES["target_text"]}" '
+        f'style="padding: {UI_CONFIG["padding"]["target_text"]}; '
+        f'font-size: {UI_CONFIG["font_size"]["target_text"]};">'
+        f'{words_html}</div>',
         unsafe_allow_html=True
     )
 
@@ -164,9 +147,6 @@ def display_welcome_message(mode: str):
 
 def handle_input(current_sentence: str):
     """입력을 처리하고 상태를 업데이트합니다."""
-    if 'input_key' not in st.session_state:
-        return
-
     input_key = f"typing_input_{st.session_state.input_key}"
     if input_key not in st.session_state:
         return
@@ -181,8 +161,8 @@ def handle_input(current_sentence: str):
         if (st.session_state.current_input_method == "AI 생성 문장" and 
             st.session_state.typing_manager.current_index == 0):
             new_sentences = generate_practice_sentences(
-                st.session_state.get('current_language', '한국어'), 
-                num_sentences=5
+                st.session_state.get('current_language', AI_CONFIG["default_language"]), 
+                num_sentences=AI_CONFIG["sentences_per_set"]
             )
             st.session_state.typing_manager.load_sentences(new_sentences)
             st.session_state.current_sentences = new_sentences
@@ -190,60 +170,37 @@ def handle_input(current_sentence: str):
         # 상태 업데이트
         st.session_state.current_sentence_index = st.session_state.typing_manager.current_index
         st.session_state.input_key = st.session_state.typing_manager.input_key
+        st.session_state.stats = st.session_state.typing_manager.stats
         st.session_state.total_sentences_completed = st.session_state.typing_manager.total_sentences_completed
-        
-        # 새 입력창 초기화
-        st.session_state[f"typing_input_{st.session_state.input_key}"] = ""
 
-def generate_practice_sentences(language: str, num_sentences: int = 4) -> List[str]:
-    """ChatGPT를 사용하여 타이핑 연습 문장을 생성합니다."""
-    client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY")))
+def generate_practice_sentences(language: str, num_sentences: int = 5) -> List[str]:
+    """AI를 사용하여 연습 문장을 생성합니다."""
+    client = OpenAI()
     
-    if language == "한국어":
-        prompt = f"""
-        다음 조건을 만족하는 {num_sentences}개의 한국어 문장을 생성해주세요:
-        - 개인의 성장과 통찰을 담은 표현
-        - 각 문장은 7-12개 단어로 구성
-        - 다양한 주제 (자기계발, 새로운 기술, 인생의 지혜 등)
-        - 영감을 주는 긍정적인 메시지 포함
-        - 실용적인 조언이나 지식을 담을 것
-        - 각 문장은 새로운 줄에 작성
-        - 문장 앞에 번호를 붙이지 말 것
-        """
-    else:  # 영어
-        prompt = f"""
-        Generate {num_sentences} English sentences that meet these criteria:
-        - Expressions containing personal growth and insights
-        - Each sentence should have 7-12 words
-        - Various topics (self-improvement, new technologies, life wisdom)
-        - Include inspiring and positive messages
-        - Contain practical advice or knowledge
-        - Write each sentence on a new line
-        - Don't add numbers before sentences
-        """
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=1.2,
-            max_tokens=200
-        )
-        
-        # 응답에서 문장들을 추출하고 처리
-        sentences = response.choices[0].message.content.strip().split('\n')
-        sentences = [s.strip() for s in sentences if s.strip()]
-        
-        return sentences[:num_sentences]  # 요청한 개수만큼만 반환
-        
-    except Exception as e:
-        st.error(f"문장 생성 중 오류가 발생했습니다: {str(e)}")
-        # 오류 시 기본 문장 반환
-        return process_input_text(get_default_text())
+    prompt = AI_CONFIG["prompts"][language].format(num_sentences=num_sentences)
+    
+    response = client.chat.completions.create(
+        model=AI_CONFIG["model"],
+        temperature=AI_CONFIG["temperature"],
+        max_tokens=AI_CONFIG["max_tokens"],
+        messages=[
+            {"role": "user", "content": prompt}
+        ]
+    )
+    
+    text = response.choices[0].message.content
+    return process_input_text(text)
 
 def get_default_text() -> str:
     """기본 연습 문장들을 문자열로 반환합니다."""
     return DEFAULT_SENTENCES
+
+def update_session_state(typing_manager: TypingManager):
+    """세션 상태를 타이핑 매니저의 상태로 업데이트합니다."""
+    st.session_state.current_sentence_index = typing_manager.current_index
+    st.session_state.input_key = typing_manager.input_key
+    st.session_state.total_sentences_completed = typing_manager.total_sentences_completed
+    st.session_state.current_sentences = typing_manager.current_sentences
 
 def main():
     st.set_page_config(layout=UI_CONFIG["page_layout"])
