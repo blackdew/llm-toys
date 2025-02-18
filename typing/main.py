@@ -5,6 +5,14 @@ import streamlit.components.v1 as components
 from pathlib import Path
 from typing import List, Dict
 from openai import OpenAI
+from config import (
+    DEFAULT_SENTENCES,
+    INPUT_MODES,
+    AI_CONFIG,
+    FILE_CONFIG,
+    UI_CONFIG,
+    CSS_CLASSES
+)
 
 class TypingStats:
     def __init__(self):
@@ -211,7 +219,7 @@ def get_default_text() -> str:
 
 def main():
     # 페이지 설정
-    st.set_page_config(layout="wide")
+    st.set_page_config(layout=UI_CONFIG["page_layout"])
     initialize_session_state()
     
     # 스타일 적용
@@ -247,11 +255,11 @@ def main():
         </style>
     """, unsafe_allow_html=True)
     
-    # 사이드바에 입력 방식 선택
+    # 입력 방식 선택
     input_method = st.sidebar.radio(
         "연습할 텍스트 선택",
-        ["직접 입력", "AI 생성 문장", "파일 업로드"],
-        index=0
+        INPUT_MODES["options"],
+        index=INPUT_MODES["options"].index(INPUT_MODES["default"])
     )
 
     # 입력 방식이 변경되면 상태 초기화
@@ -288,8 +296,8 @@ def main():
     elif input_method == "AI 생성 문장":
         language = st.sidebar.selectbox(
             "언어 선택",
-            ["한국어", "English"],
-            index=0
+            AI_CONFIG["languages"],
+            index=AI_CONFIG["languages"].index(AI_CONFIG["default_language"])
         )
         st.session_state.current_language = language
         
@@ -305,25 +313,24 @@ def main():
             sentences = st.session_state.current_sentences
 
     else:  # 파일 업로드
-        uploaded_file = st.sidebar.file_uploader("텍스트 파일을 업로드하세요", type=['txt'])
+        uploaded_file = st.sidebar.file_uploader(
+            "텍스트 파일을 업로드하세요", 
+            type=FILE_CONFIG["allowed_types"]
+        )
         
-        col1, col2 = st.sidebar.columns(2)
-        with col1:
-            start_line = st.number_input(
-                "시작 문장 위치",
-                min_value=0,
-                value=0,
-                help="연습을 시작할 문장의 위치를 지정합니다. (0부터 시작)"
-            )
-        with col2:
-            lines_per_set = st.number_input(
-                "연습할 문장 수",
-                min_value=1,
-                max_value=50,
-                value=10,
-                help="한 번에 연습할 문장의 수를 설정합니다."
-            )
-            
+        start_line = st.sidebar.number_input(
+            "시작 문장 위치",
+            min_value=FILE_CONFIG["default_start_line"],
+            value=FILE_CONFIG["default_start_line"]
+        )
+        
+        lines_per_set = st.sidebar.number_input(
+            "연습할 문장 수",
+            min_value=FILE_CONFIG["min_sentences"],
+            max_value=FILE_CONFIG["max_sentences"],
+            value=FILE_CONFIG["default_sentences"]
+        )
+        
         if 'current_sentences' not in st.session_state:
             st.markdown("""
                 <div style='text-align: center; padding: 50px;'>
