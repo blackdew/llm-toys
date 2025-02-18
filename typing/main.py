@@ -202,33 +202,26 @@ def handle_input(current_sentence: str):
     if not input_text:
         return
 
-    # 통계 업데이트
-    input_words = input_text.strip().split()
-    target_words = current_sentence.split()
-    st.session_state.stats.update(input_words, target_words)
+    # 타이핑 매니저를 통한 입력 처리
+    if st.session_state.typing_manager.handle_input(input_text):
+        # AI 생성 문장 모드에서 새로운 문장 세트 생성
+        if (st.session_state.current_input_method == "AI 생성 문장" and 
+            st.session_state.typing_manager.current_index == 0):
+            new_sentences = generate_practice_sentences(
+                st.session_state.get('current_language', '한국어'), 
+                num_sentences=5
+            )
+            st.session_state.typing_manager.load_sentences(new_sentences)
+            st.session_state.current_sentences = new_sentences
 
-    # 다음 문장으로 이동
-    sentences = st.session_state.current_sentences
-    next_index = st.session_state.current_sentence_index + 1
-
-    # AI 생성 문장 모드에서 마지막 문장 완료 시 자동으로 새로운 문장 생성
-    if (st.session_state.current_input_method == "AI 생성 문장" and 
-        next_index >= len(sentences)):
-        # 완료한 문장 세트 카운트 증가
-        st.session_state.total_sentences_completed += len(sentences)
-        # 새로운 문장 생성
-        new_sentences = generate_practice_sentences(
-            st.session_state.get('current_language', '한국어'), 
-            num_sentences=5
-        )
-        st.session_state.current_sentences = new_sentences
-        next_index = 0
-    else:
-        next_index = next_index % len(sentences)
-
-    st.session_state.current_sentence_index = next_index
-    st.session_state.input_key += 1
-    st.session_state[f"typing_input_{st.session_state.input_key}"] = ""
+        # 상태 업데이트
+        st.session_state.current_sentence_index = st.session_state.typing_manager.current_index
+        st.session_state.input_key = st.session_state.typing_manager.input_key
+        st.session_state.stats = st.session_state.typing_manager.stats
+        st.session_state.total_sentences_completed = st.session_state.typing_manager.total_sentences_completed
+        
+        # 새 입력창 초기화
+        st.session_state[f"typing_input_{st.session_state.input_key}"] = ""
 
 def generate_practice_sentences(language: str, num_sentences: int = 4) -> List[str]:
     """ChatGPT를 사용하여 타이핑 연습 문장을 생성합니다."""
@@ -293,6 +286,7 @@ def main():
     # 입력 방식이 변경되면 상태 초기화
     if st.session_state.current_input_method != input_method:
         st.session_state.current_input_method = input_method
+        st.session_state.typing_manager.set_input_method(input_method)
         st.session_state.current_sentence_index = 0
         st.session_state.input_key = 0
         st.session_state.stats = TypingStats()
@@ -349,9 +343,13 @@ def main():
     # 공통 연습 시작 버튼
     st.sidebar.markdown("---")
     if st.sidebar.button("연습 시작", use_container_width=True):
+        # 타이핑 매니저 초기화
+        st.session_state.typing_manager.reset_all()
+
         if input_method == "직접 입력":
             if text_input:
                 sentences = process_input_text(text_input)
+                st.session_state.typing_manager.load_sentences(sentences)
                 st.session_state.current_sentences = sentences
                 st.session_state.practice_started = True
             else:
@@ -361,6 +359,7 @@ def main():
         elif input_method == "AI 생성 문장":
             with st.spinner(f"{language} 문장을 생성하는 중..."):
                 sentences = generate_practice_sentences(language, num_sentences=5)
+                st.session_state.typing_manager.load_sentences(sentences)
                 st.session_state.current_sentences = sentences
                 st.session_state.practice_started = True
 
@@ -375,6 +374,7 @@ def main():
             
             end_line = start_line + lines_per_set
             sentences = all_sentences[start_line:end_line]
+            st.session_state.typing_manager.load_sentences(sentences)
             st.session_state.current_sentences = sentences
             st.session_state.practice_started = True
 
