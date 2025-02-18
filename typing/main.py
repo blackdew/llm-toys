@@ -61,14 +61,20 @@ def load_template(template_path: str) -> str:
     """HTML 템플릿 파일을 로드합니다."""
     return Path(template_path).read_text(encoding='utf-8')
 
-def load_sentences() -> List[str]:
-    """연습할 문장들을 로드합니다."""
+def load_default_sentences() -> List[str]:
+    """기본 연습 문장들을 로드합니다."""
     return [
         "수고했어 오늘도 좋은 하루 보내세요",
         "타이핑 연습을 시작해 보겠습니다",
         "하나 둘 셋 넷 다섯 여섯 일곱",
         "오늘 날씨가 참 좋네요"
     ]
+
+def process_input_text(text: str) -> List[str]:
+    """입력된 텍스트를 문장 리스트로 변환합니다."""
+    # 빈 줄 제거하고 각 줄을 문장으로 처리
+    sentences = [line.strip() for line in text.split('\n') if line.strip()]
+    return sentences
 
 def load_javascript() -> str:
     """JavaScript 코드를 별도 파일에서 로드합니다."""
@@ -117,7 +123,7 @@ def handle_input(current_sentence: str):
     st.session_state.stats.update(input_words, target_words)
 
     # 다음 문장으로 이동
-    sentences = load_sentences()
+    sentences = load_default_sentences()
     next_index = (st.session_state.current_sentence_index + 1) % len(sentences)
     st.session_state.current_sentence_index = next_index
     st.session_state.input_key += 1
@@ -161,7 +167,49 @@ def main():
         </style>
     """, unsafe_allow_html=True)
     
-    sentences = load_sentences()
+    # 사이드바에 입력 방식 선택
+    input_method = st.sidebar.radio(
+        "연습할 텍스트 선택",
+        ["기본 문장", "직접 입력", "파일 업로드"]
+    )
+
+    # 선택된 입력 방식에 따라 문장 로드
+    if input_method == "기본 문장":
+        sentences = load_default_sentences()
+    elif input_method == "직접 입력":
+        text_input = st.sidebar.text_area(
+            "연습할 텍스트를 입력하세요 (각 줄이 하나의 문장이 됩니다)",
+            height=200
+        )
+        if text_input:
+            sentences = process_input_text(text_input)
+            # 새로운 텍스트가 입력되면 세션 상태 초기화
+            if 'current_text' not in st.session_state or st.session_state.current_text != text_input:
+                st.session_state.current_text = text_input
+                st.session_state.current_sentence_index = 0
+                st.session_state.input_key = 0
+                st.session_state.stats = TypingStats()
+        else:
+            sentences = load_default_sentences()
+    else:  # 파일 업로드
+        uploaded_file = st.sidebar.file_uploader("텍스트 파일을 업로드하세요", type=['txt'])
+        if uploaded_file:
+            text_content = uploaded_file.getvalue().decode('utf-8')
+            sentences = process_input_text(text_content)
+            # 새로운 파일이 업로드되면 세션 상태 초기화
+            if 'current_file' not in st.session_state or st.session_state.current_file != uploaded_file.name:
+                st.session_state.current_file = uploaded_file.name
+                st.session_state.current_sentence_index = 0
+                st.session_state.input_key = 0
+                st.session_state.stats = TypingStats()
+        else:
+            sentences = load_default_sentences()
+
+    # 문장이 비어있으면 기본 문장 사용
+    if not sentences:
+        st.sidebar.warning("텍스트가 비어있어 기본 문장을 사용합니다.")
+        sentences = load_default_sentences()
+
     current_sentence = sentences[st.session_state.current_sentence_index]
     
     # 통계 표시
@@ -177,6 +225,10 @@ def main():
     # 실시간 타이핑 체크와 자동 포커스를 위한 JavaScript
     check_script = """
     <script>
+        function cleanText(text) {
+            return text.trim().replace(/\\s+/g, ' ');
+        }
+
         function checkTyping() {
             const doc = window.parent.document;
             const input = doc.querySelector('input[type="text"]');
@@ -184,7 +236,7 @@ def main():
             
             if (!input) return;
             
-            const inputWords = input.value.trim().split(' ');
+            const inputWords = cleanText(input.value).split(' ');
             
             words.forEach(word => {
                 word.classList.remove('correct', 'incorrect');
@@ -192,22 +244,30 @@ def main():
             
             inputWords.forEach((word, i) => {
                 if (i < words.length) {
-                    const targetWord = words[i].textContent;
-                    if (word === targetWord) {
+                    const targetWord = cleanText(words[i].textContent);
+                    const inputWord = cleanText(word);
+                    if (inputWord === targetWord) {
                         words[i].classList.add('correct');
-                    } else if (word) {
+                    } else if (inputWord) {
                         words[i].classList.add('incorrect');
                     }
                 }
             });
         }
 
-        function focusInput() {
+        let lastInputValue = '';
+
+        function setupTypingInput() {
             const doc = window.parent.document;
             const input = doc.querySelector('input[type="text"]');
-            if (input) {
-                input.focus();
+            
+            if (!input) return;
+            
+            // 새로운 입력창 감지 (value가 빈 문자열인 경우)
+            if (input.value === '' && lastInputValue !== '') {
+                lastInputValue = '';
                 
+                // 이벤트 리스너 설정
                 if (!input.dataset.hasTypingListener) {
                     input.addEventListener('input', checkTyping);
                     input.addEventListener('keypress', function(e) {
@@ -219,16 +279,22 @@ def main():
                     });
                     input.dataset.hasTypingListener = 'true';
                 }
+                
+                // 새 문장이 나타났을 때 포커스
+                setTimeout(() => input.focus(), 100);
             }
+            
+            lastInputValue = input.value;
         }
 
+        // 주기적으로 체크
         setInterval(() => {
-            focusInput();
             checkTyping();
+            setupTypingInput();
         }, 100);
 
-        focusInput();
-        checkTyping();
+        // 초기 설정
+        setupTypingInput();
     </script>
     """
     
@@ -241,6 +307,12 @@ def main():
         label_visibility="collapsed",
         on_change=lambda: handle_input(current_sentence)
     )
+
+    # 사이드바에 현재 진행 상황 표시
+    st.sidebar.markdown("---")
+    st.sidebar.markdown(f"**현재 진행 상황**")
+    st.sidebar.markdown(f"전체 문장 수: {len(sentences)}")
+    st.sidebar.markdown(f"현재 문장: {st.session_state.current_sentence_index + 1}")
 
 if __name__ == "__main__":
     main()
