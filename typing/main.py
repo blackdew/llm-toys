@@ -285,7 +285,7 @@ def main():
     
     # 입력 방식 선택
     input_method = st.sidebar.radio(
-        "연습할 텍스트 선택",
+        "모드 선택",
         INPUT_MODES["options"],
         index=INPUT_MODES["options"].index(INPUT_MODES["default"])
     )
@@ -305,13 +305,13 @@ def main():
 
     if input_method == "직접 입력":
         text_input = st.sidebar.text_area(
-            "연습할 텍스트를 입력하세요 (각 줄이 하나의 문장이 됩니다)",
+            "연습할 문장 입력 (줄바꿈으로 구분)",
             value=DEFAULT_SENTENCES,
             height=UI_CONFIG["text_area_height"]
         )
 
     elif input_method == "AI 생성 문장":
-        language = st.sidebar.radio(
+        language = st.sidebar.selectbox(
             "언어 선택",
             AI_CONFIG["languages"],
             index=AI_CONFIG["languages"].index(AI_CONFIG["default_language"])
@@ -397,14 +397,6 @@ def main():
     current_sentence = sentences[st.session_state.current_sentence_index]
     display_sentence(current_sentence)
     display_stats(st.session_state.stats.to_dict(), len(sentences))
-    
-    # 사이드바에 현재 진행 상황 표시
-    st.sidebar.markdown("---")
-    st.sidebar.markdown(f"**현재 진행 상황**")
-    current_progress = st.session_state.current_sentence_index + 1 + st.session_state.total_sentences_completed
-    total_sentences = len(sentences) + st.session_state.total_sentences_completed
-    st.sidebar.markdown(f"전체 문장 수: {total_sentences}")
-    st.sidebar.markdown(f"현재 문장: {current_progress}")
 
     # JavaScript 실시간 체크
     js_code = Path('static/typing.js').read_text()
