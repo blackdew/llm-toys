@@ -202,18 +202,22 @@ def generate_practice_sentences(language: str, num_sentences: int = 4) -> List[s
     if language == "한국어":
         prompt = f"""
         다음 조건을 만족하는 {num_sentences}개의 한국어 문장을 생성해주세요:
-        - 일상적이고 자연스러운 표현
-        - 각 문장은 5-10개 단어로 구성
-        - 다양한 주제 (일상, 직장, 취미 등)
+        - 개인의 성장과 통찰을 담은 표현
+        - 각 문장은 7-12개 단어로 구성
+        - 다양한 주제 (자기계발, 새로운 기술, 인생의 지혜 등)
+        - 영감을 주는 긍정적인 메시지 포함
+        - 실용적인 조언이나 지식을 담을 것
         - 각 문장은 새로운 줄에 작성
         - 문장 앞에 번호를 붙이지 말 것
         """
     else:  # 영어
         prompt = f"""
         Generate {num_sentences} English sentences that meet these criteria:
-        - Natural everyday expressions
-        - Each sentence should have 5-10 words
-        - Various topics (daily life, work, hobbies, etc.)
+        - Expressions containing personal growth and insights
+        - Each sentence should have 7-12 words
+        - Various topics (self-improvement, new technologies, life wisdom)
+        - Include inspiring and positive messages
+        - Contain practical advice or knowledge
         - Write each sentence on a new line
         - Don't add numbers before sentences
         """
@@ -222,7 +226,7 @@ def generate_practice_sentences(language: str, num_sentences: int = 4) -> List[s
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
+            temperature=1.2,
             max_tokens=200
         )
         
