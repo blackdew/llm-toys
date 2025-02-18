@@ -1,0 +1,32 @@
+.target-text {
+    font-size: 24px;
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 5px;
+    margin: 20px 0;
+}
+
+.stTextInput > div > div > input {
+    font-size: 18px;
+}
+
+.correct {
+    color: #28a745;
+}
+
+.incorrect {
+    color: #dc3545;
+}
+
+.stats {
+    display: flex;
+    gap: 20px;
+    margin: 20px 0;
+    font-size: 16px;
+}
+
+.stats-item {
+    padding: 10px;
+    border-radius: 5px;
+    background-color: #f8f9fa;
+} 
