@@ -195,7 +195,7 @@ def handle_input(current_sentence: str):
 
 def generate_practice_sentences(language: str, num_sentences: int = 4) -> List[str]:
     """ChatGPT를 사용하여 타이핑 연습 문장을 생성합니다."""
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY")))
     
     if language == "한국어":
         prompt = f"""
