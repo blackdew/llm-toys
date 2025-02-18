@@ -93,17 +93,22 @@ def initialize_session_state():
         st.session_state.stats = TypingStats()
     if 'current_sentences' not in st.session_state:
         st.session_state.current_sentences = process_input_text(get_default_text())
+    if 'total_sentences_completed' not in st.session_state:
+        st.session_state.total_sentences_completed = 0
     
     # 인덱스가 범위를 벗어났는지 확인하고 수정
     if (st.session_state.current_sentence_index >= len(st.session_state.current_sentences) or 
         st.session_state.current_sentence_index < 0):
         st.session_state.current_sentence_index = 0
 
-def display_stats(stats: TypingStats, total_sentences: int):
+def display_stats(stats: TypingStats, current_sentences: int):
     """통계를 표시합니다."""
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
-        st.markdown(f"**진행률:** {st.session_state.current_sentence_index + 1} / {total_sentences}")
+        # 현재 문장 인덱스 + 이전에 완료한 문장 수를 합산하여 표시
+        current_progress = st.session_state.current_sentence_index + 1 + st.session_state.total_sentences_completed
+        total_sentences = current_sentences + st.session_state.total_sentences_completed
+        st.markdown(f"**진행률:** {current_progress} / {total_sentences}")
     with col2:
         st.markdown(f"**전체 단어:** {stats.total_words}")
     with col3:
@@ -132,8 +137,24 @@ def handle_input(current_sentence: str):
     st.session_state.stats.update(input_words, target_words)
 
     # 다음 문장으로 이동
-    sentences = st.session_state.current_sentences  # 현재 사용 중인 문장 세트 사용
-    next_index = (st.session_state.current_sentence_index + 1) % len(sentences)
+    sentences = st.session_state.current_sentences
+    next_index = st.session_state.current_sentence_index + 1
+
+    # AI 생성 문장 모드에서 마지막 문장 완료 시 자동으로 새로운 문장 생성
+    if (st.session_state.current_input_method == "AI 생성 문장" and 
+        next_index >= len(sentences)):
+        # 완료한 문장 세트 카운트 증가
+        st.session_state.total_sentences_completed += len(sentences)
+        # 새로운 문장 생성
+        new_sentences = generate_practice_sentences(
+            st.session_state.get('current_language', '한국어'), 
+            num_sentences=5
+        )
+        st.session_state.current_sentences = new_sentences
+        next_index = 0
+    else:
+        next_index = next_index % len(sentences)
+
     st.session_state.current_sentence_index = next_index
     st.session_state.input_key += 1
     st.session_state[f"typing_input_{st.session_state.input_key}"] = ""
@@ -228,8 +249,24 @@ def main():
     input_method = st.sidebar.radio(
         "연습할 텍스트 선택",
         ["직접 입력", "AI 생성 문장", "파일 업로드"],
-        index=0  # 직접 입력을 기본값으로 설정
+        index=0
     )
+
+    # 입력 방식이 변경되면 상태 초기화
+    if 'current_input_method' not in st.session_state:
+        st.session_state.current_input_method = input_method
+    elif st.session_state.current_input_method != input_method:
+        st.session_state.current_input_method = input_method
+        st.session_state.current_sentence_index = 0
+        st.session_state.input_key = 0
+        st.session_state.stats = TypingStats()
+        st.session_state.total_sentences_completed = 0
+        if 'current_sentences' in st.session_state:
+            del st.session_state.current_sentences
+        if 'current_text' in st.session_state:
+            del st.session_state.current_text
+        if 'current_file' in st.session_state:
+            del st.session_state.current_file
 
     # 선택된 입력 방식에 따라 문장 로드
     if input_method == "직접 입력":
@@ -253,19 +290,35 @@ def main():
             st.session_state.current_sentences = generate_practice_sentences("한국어", 4)
             sentences = st.session_state.current_sentences
     elif input_method == "AI 생성 문장":
-        language = st.sidebar.radio("언어 선택", ["한국어", "English"])
-        num_sentences = st.sidebar.slider("생성할 문장 수", 4, 10, 4)
+        language = st.sidebar.selectbox(
+            "언어 선택",
+            ["한국어", "English"],
+            index=0
+        )
+        # 선택된 언어 저장
+        st.session_state.current_language = language
         
-        if 'current_sentences' not in st.session_state or st.sidebar.button("새로운 문장 생성"):
+        # 문장 생성 버튼을 항상 표시
+        if st.sidebar.button("새로운 문장 생성"):
             with st.spinner(f"{language} 문장을 생성하는 중..."):
-                sentences = generate_practice_sentences(language, num_sentences)
-                # 새로운 문장이 생성되면 세션 상태 초기화
+                sentences = generate_practice_sentences(language, num_sentences=5)
                 st.session_state.current_sentence_index = 0
                 st.session_state.input_key = 0
-                st.session_state.stats = TypingStats()
                 st.session_state.current_sentences = sentences
         else:
-            sentences = st.session_state.current_sentences
+            # 문장이 없는 경우
+            if 'current_sentences' not in st.session_state:
+                st.markdown("""
+                    <div style='text-align: center; padding: 50px;'>
+                        <h2>AI 생성 문장 연습</h2>
+                        <p>원하는 언어를 선택하고 '새로운 문장 생성' 버튼을 클릭하여 시작하세요.</p>
+                        <p>한 번에 5개의 문장이 생성되며, 자동으로 다음 문장 세트가 생성됩니다.</p>
+                    </div>
+                """, unsafe_allow_html=True)
+                sentences = []
+                return
+            else:
+                sentences = st.session_state.current_sentences
     else:  # 파일 업로드
         uploaded_file = st.sidebar.file_uploader("텍스트 파일을 업로드하세요", type=['txt'])
         if uploaded_file:
@@ -284,12 +337,9 @@ def main():
             st.session_state.current_sentences = generate_practice_sentences("한국어", 4)
             sentences = st.session_state.current_sentences
 
-    # 문장이 비어있으면 기본 문장 사용
+    # 문장이 비어있으면 나머지 UI를 표시하지 않음
     if not sentences:
-        st.sidebar.warning("텍스트가 비어있어 기본 문장을 사용합니다.")
-        sentences = process_input_text(get_default_text())
-        st.session_state.current_sentences = sentences
-        st.session_state.current_sentence_index = 0
+        return
 
     # 인덱스가 범위를 벗어났는지 확인
     if st.session_state.current_sentence_index >= len(sentences):
@@ -299,7 +349,15 @@ def main():
     
     # 통계 표시
     display_stats(st.session_state.stats, len(sentences))
-    
+        
+    # 사이드바에 현재 진행 상황 표시
+    st.sidebar.markdown("---")
+    st.sidebar.markdown(f"**현재 진행 상황**")
+    current_progress = st.session_state.current_sentence_index + 1 + st.session_state.total_sentences_completed
+    total_sentences = len(sentences) + st.session_state.total_sentences_completed
+    st.sidebar.markdown(f"전체 문장 수: {total_sentences}")
+    st.sidebar.markdown(f"현재 문장: {current_progress}")
+
     # 현재 문장 표시
     words_html = ' '.join([
         f'<span class="word" id="word-{i}">{word}</span>' 
@@ -398,12 +456,6 @@ def main():
         label_visibility="collapsed",
         on_change=lambda: handle_input(current_sentence)
     )
-
-    # 사이드바에 현재 진행 상황 표시
-    st.sidebar.markdown("---")
-    st.sidebar.markdown(f"**현재 진행 상황**")
-    st.sidebar.markdown(f"전체 문장 수: {len(sentences)}")
-    st.sidebar.markdown(f"현재 문장: {st.session_state.current_sentence_index + 1}")
 
 if __name__ == "__main__":
     main()
