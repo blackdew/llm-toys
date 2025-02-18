@@ -1,10 +1,10 @@
 import time
-import json
+import os
 import streamlit as st
 import streamlit.components.v1 as components
-from datetime import datetime
 from pathlib import Path
 from typing import List, Dict
+from openai import OpenAI
 
 class TypingStats:
     def __init__(self):
@@ -64,10 +64,9 @@ def load_template(template_path: str) -> str:
 def load_default_sentences() -> List[str]:
     """기본 연습 문장들을 로드합니다."""
     return [
-        "수고했어 오늘도 좋은 하루 보내세요",
-        "타이핑 연습을 시작해 보겠습니다",
-        "하나 둘 셋 넷 다섯 여섯 일곱",
-        "오늘 날씨가 참 좋네요"
+        "타이핑 연습을 하는 어플입니다.",
+        "문장을 연습할 문장을 넣어주세요.",
+        "한 문장씩 연습할 수 있습니다."
     ]
 
 def process_input_text(text: str) -> List[str]:
@@ -92,6 +91,8 @@ def initialize_session_state():
         st.session_state.input_key = 0
     if 'stats' not in st.session_state:
         st.session_state.stats = TypingStats()
+    if 'current_sentences' not in st.session_state:
+        st.session_state.current_sentences = process_input_text(get_default_text())
 
 def display_stats(stats: TypingStats, total_sentences: int):
     """통계를 표시합니다."""
@@ -109,6 +110,9 @@ def display_stats(stats: TypingStats, total_sentences: int):
 
 def handle_input(current_sentence: str):
     """입력을 처리하고 상태를 업데이트합니다."""
+    if 'input_key' not in st.session_state:
+        return
+
     input_key = f"typing_input_{st.session_state.input_key}"
     if input_key not in st.session_state:
         return
@@ -123,11 +127,59 @@ def handle_input(current_sentence: str):
     st.session_state.stats.update(input_words, target_words)
 
     # 다음 문장으로 이동
-    sentences = load_default_sentences()
+    sentences = st.session_state.current_sentences  # 현재 사용 중인 문장 세트 사용
     next_index = (st.session_state.current_sentence_index + 1) % len(sentences)
     st.session_state.current_sentence_index = next_index
     st.session_state.input_key += 1
     st.session_state[f"typing_input_{st.session_state.input_key}"] = ""
+
+def generate_practice_sentences(language: str, num_sentences: int = 4) -> List[str]:
+    """ChatGPT를 사용하여 타이핑 연습 문장을 생성합니다."""
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    
+    if language == "한국어":
+        prompt = f"""
+        다음 조건을 만족하는 {num_sentences}개의 한국어 문장을 생성해주세요:
+        - 일상적이고 자연스러운 표현
+        - 각 문장은 5-10개 단어로 구성
+        - 다양한 주제 (일상, 직장, 취미 등)
+        - 각 문장은 새로운 줄에 작성
+        - 문장 앞에 번호를 붙이지 말 것
+        """
+    else:  # 영어
+        prompt = f"""
+        Generate {num_sentences} English sentences that meet these criteria:
+        - Natural everyday expressions
+        - Each sentence should have 5-10 words
+        - Various topics (daily life, work, hobbies, etc.)
+        - Write each sentence on a new line
+        - Don't add numbers before sentences
+        """
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=200
+        )
+        
+        # 응답에서 문장들을 추출하고 처리
+        sentences = response.choices[0].message.content.strip().split('\n')
+        sentences = [s.strip() for s in sentences if s.strip()]
+        
+        return sentences[:num_sentences]  # 요청한 개수만큼만 반환
+        
+    except Exception as e:
+        st.error(f"문장 생성 중 오류가 발생했습니다: {str(e)}")
+        # 오류 시 기본 문장 반환
+        return process_input_text(get_default_text())
+
+def get_default_text() -> str:
+    """기본 연습 문장들을 문자열로 반환합니다."""
+    return """타이핑 연습을 하는 어플입니다.
+문장을 연습할 문장을 넣어주세요.
+한 문장씩 연습할 수 있습니다."""
 
 def main():
     # 페이지 설정
@@ -170,15 +222,15 @@ def main():
     # 사이드바에 입력 방식 선택
     input_method = st.sidebar.radio(
         "연습할 텍스트 선택",
-        ["기본 문장", "직접 입력", "파일 업로드"]
+        ["직접 입력", "AI 생성 문장", "파일 업로드"],
+        index=0  # 직접 입력을 기본값으로 설정
     )
 
     # 선택된 입력 방식에 따라 문장 로드
-    if input_method == "기본 문장":
-        sentences = load_default_sentences()
-    elif input_method == "직접 입력":
+    if input_method == "직접 입력":
         text_input = st.sidebar.text_area(
             "연습할 텍스트를 입력하세요 (각 줄이 하나의 문장이 됩니다)",
+            value=get_default_text(),  # 기본 텍스트 미리 입력
             height=200
         )
         if text_input:
@@ -189,8 +241,26 @@ def main():
                 st.session_state.current_sentence_index = 0
                 st.session_state.input_key = 0
                 st.session_state.stats = TypingStats()
+                st.session_state.current_sentences = sentences
         else:
-            sentences = load_default_sentences()
+            # 빈 입력일 경우 AI 생성 문장으로 돌아감
+            st.sidebar.warning("텍스트가 비어있어 AI 생성 문장을 사용합니다.")
+            st.session_state.current_sentences = generate_practice_sentences("한국어", 4)
+            sentences = st.session_state.current_sentences
+    elif input_method == "AI 생성 문장":
+        language = st.sidebar.radio("언어 선택", ["한국어", "English"])
+        num_sentences = st.sidebar.slider("생성할 문장 수", 4, 10, 4)
+        
+        if 'current_sentences' not in st.session_state or st.sidebar.button("새로운 문장 생성"):
+            with st.spinner(f"{language} 문장을 생성하는 중..."):
+                sentences = generate_practice_sentences(language, num_sentences)
+                # 새로운 문장이 생성되면 세션 상태 초기화
+                st.session_state.current_sentence_index = 0
+                st.session_state.input_key = 0
+                st.session_state.stats = TypingStats()
+                st.session_state.current_sentences = sentences
+        else:
+            sentences = st.session_state.current_sentences
     else:  # 파일 업로드
         uploaded_file = st.sidebar.file_uploader("텍스트 파일을 업로드하세요", type=['txt'])
         if uploaded_file:
@@ -202,13 +272,17 @@ def main():
                 st.session_state.current_sentence_index = 0
                 st.session_state.input_key = 0
                 st.session_state.stats = TypingStats()
+                st.session_state.current_sentences = sentences
         else:
-            sentences = load_default_sentences()
+            # 파일이 없을 경우 AI 생성 문장으로 돌아감
+            st.sidebar.warning("파일이 없어 AI 생성 문장을 사용합니다.")
+            st.session_state.current_sentences = generate_practice_sentences("한국어", 4)
+            sentences = st.session_state.current_sentences
 
     # 문장이 비어있으면 기본 문장 사용
     if not sentences:
         st.sidebar.warning("텍스트가 비어있어 기본 문장을 사용합니다.")
-        sentences = load_default_sentences()
+        sentences = process_input_text(get_default_text())
 
     current_sentence = sentences[st.session_state.current_sentence_index]
     
