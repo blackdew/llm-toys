@@ -1,32 +1,49 @@
+/* 타겟 텍스트 스타일 */
 .target-text {
-    font-size: 24px;
-    background-color: #f8f9fa;
-    padding: 20px;
-    border-radius: 5px;
+    font-size: var(--target-text-font-size, 24px);
+    background-color: var(--background-color, #f8f9fa);
+    padding: var(--target-text-padding, 20px);
+    border-radius: var(--border-radius, 5px);
     margin: 20px 0;
 }
 
+/* 입력 필드 스타일 */
 .stTextInput > div > div > input {
-    font-size: 18px;
+    font-size: var(--input-text-font-size, 18px);
 }
 
+/* 단어 상태 스타일 */
 .correct {
-    color: #28a745;
+    color: var(--correct-color, #28a745);
 }
 
 .incorrect {
-    color: #dc3545;
+    color: var(--incorrect-color, #dc3545);
 }
 
+/* 통계 표시 스타일 */
 .stats {
     display: flex;
     gap: 20px;
     margin: 20px 0;
-    font-size: 16px;
+    font-size: var(--stats-font-size, 16px);
 }
 
 .stats-item {
-    padding: 10px;
-    border-radius: 5px;
-    background-color: #f8f9fa;
+    padding: var(--stats-item-padding, 10px);
+    border-radius: var(--border-radius, 5px);
+    background-color: var(--background-color, #f8f9fa);
+}
+
+/* CSS 변수 정의 */
+:root {
+    --target-text-font-size: 24px;
+    --input-text-font-size: 18px;
+    --stats-font-size: 16px;
+    --correct-color: #28a745;
+    --incorrect-color: #dc3545;
+    --background-color: #f8f9fa;
+    --target-text-padding: 20px;
+    --stats-item-padding: 10px;
+    --border-radius: 5px;
 } 

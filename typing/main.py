@@ -5,6 +5,7 @@ import streamlit.components.v1 as components
 from pathlib import Path
 from typing import List, Dict
 from openai import OpenAI
+from typing_manager import TypingManager
 from config import (
     DEFAULT_SENTENCES,
     INPUT_MODES,
@@ -87,9 +88,30 @@ def load_javascript() -> str:
     """JavaScript 코드를 별도 파일에서 로드합니다."""
     return Path('static/typing.js').read_text(encoding='utf-8')
 
-def load_styles() -> str:
-    """CSS 스타일을 별도 파일에서 로드합니다."""
-    return Path('static/styles.css').read_text(encoding='utf-8')
+def load_styles():
+    """스타일 로드"""
+    # CSS 파일 로드
+    css_content = Path('static/styles.css').read_text()
+    
+    # CSS 변수 설정
+    css_vars = f"""
+    <style>
+    :root {{
+        --target-text-font-size: {UI_CONFIG["font_size"]["target_text"]};
+        --input-text-font-size: {UI_CONFIG["font_size"]["input_text"]};
+        --stats-font-size: {UI_CONFIG["font_size"]["stats"]};
+        --correct-color: {UI_CONFIG["colors"]["correct"]};
+        --incorrect-color: {UI_CONFIG["colors"]["incorrect"]};
+        --background-color: {UI_CONFIG["colors"]["background"]};
+        --target-text-padding: {UI_CONFIG["padding"]["target_text"]};
+        --stats-item-padding: {UI_CONFIG["padding"]["stats_item"]};
+        --border-radius: {UI_CONFIG["border_radius"]};
+    }}
+    {css_content}
+    </style>
+    """
+    
+    st.markdown(css_vars, unsafe_allow_html=True)
 
 def initialize_session_state():
     """세션 상태를 초기화합니다."""
@@ -104,29 +126,79 @@ def initialize_session_state():
     if 'total_sentences_completed' not in st.session_state:
         st.session_state.total_sentences_completed = 0
     if 'current_input_method' not in st.session_state:
-        st.session_state.current_input_method = "직접 입력"
+        st.session_state.current_input_method = INPUT_MODES["default"]
     
+    # TypingManager 추가
+    if 'typing_manager' not in st.session_state:
+        manager = TypingManager()
+        # 기존 상태와 동기화
+        if 'current_sentences' in st.session_state:
+            manager.current_sentences = st.session_state.current_sentences
+            manager.current_index = st.session_state.current_sentence_index
+            manager.total_sentences_completed = st.session_state.total_sentences_completed
+            manager.input_key = st.session_state.input_key
+        st.session_state.typing_manager = manager
+
     # 인덱스가 범위를 벗어났는지 확인하고 수정
     if (st.session_state.current_sentence_index >= len(st.session_state.current_sentences) or 
         st.session_state.current_sentence_index < 0):
         st.session_state.current_sentence_index = 0
 
-def display_stats(stats: TypingStats, current_sentences: int):
+def display_stats(stats: Dict, current_sentences: int):
     """통계를 표시합니다."""
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
-        # 현재 문장 인덱스 + 이전에 완료한 문장 수를 합산하여 표시
         current_progress = st.session_state.current_sentence_index + 1 + st.session_state.total_sentences_completed
         total_sentences = current_sentences + st.session_state.total_sentences_completed
         st.markdown(f"**진행률:** {current_progress} / {total_sentences}")
     with col2:
-        st.markdown(f"**전체 단어:** {stats.total_words}")
+        st.markdown(f"**전체 단어:** {stats['total_words']}")
     with col3:
-        st.markdown(f"**정확한 단어:** {stats.correct_words}")
+        st.markdown(f"**정확한 단어:** {stats['correct_words']}")
     with col4:
-        st.markdown(f"**틀린 단어:** {stats.incorrect_words}")
+        st.markdown(f"**틀린 단어:** {stats['incorrect_words']}")
     with col5:
-        st.markdown(f"**타자 속도:** {stats.get_wpm()} WPM")
+        st.markdown(f"**타자 속도:** {stats['wpm']} WPM")
+
+def display_sentence(sentence: str):
+    """현재 문장을 표시합니다."""
+    words_html = ' '.join([
+        f'<span class="{CSS_CLASSES["word"]}" id="word-{i}">{word}</span>' 
+        for i, word in enumerate(sentence.split())
+    ])
+    st.markdown(
+        f'<div class="{CSS_CLASSES["target_text"]}">{words_html}</div>', 
+        unsafe_allow_html=True
+    )
+
+def display_welcome_message(mode: str):
+    """모드별 환영 메시지를 표시합니다."""
+    messages = {
+        "직접 입력": {
+            "title": "직접 입력 연습",
+            "description": "연습할 텍스트를 입력하고 '연습시작' 버튼을 클릭하여 시작하세요.",
+            "sub_text": "각 줄이 하나의 문장으로 처리됩니다."
+        },
+        "AI 생성 문장": {
+            "title": "AI 생성 문장 연습",
+            "description": "원하는 언어를 선택하고 '연습시작' 버튼을 클릭하여 시작하세요.",
+            "sub_text": "한 번에 5개의 문장이 생성되며, 자동으로 다음 문장 세트가 생성됩니다."
+        },
+        "파일 업로드": {
+            "title": "파일 업로드 연습",
+            "description": "텍스트 파일(.txt)을 업로드하고 '연습시작' 버튼을 클릭하여 시작하세요.",
+            "sub_text": "시작 위치와 연습할 문장 수를 설정할 수 있습니다."
+        }
+    }
+    
+    msg = messages[mode]
+    st.markdown(f"""
+        <div style='text-align: center; padding: 50px;'>
+            <h2>{msg["title"]}</h2>
+            <p>{msg["description"]}</p>
+            <p>{msg["sub_text"]}</p>
+        </div>
+    """, unsafe_allow_html=True)
 
 def handle_input(current_sentence: str):
     """입력을 처리하고 상태를 업데이트합니다."""
@@ -218,42 +290,11 @@ def get_default_text() -> str:
 한 문장씩 연습할 수 있습니다."""
 
 def main():
-    # 페이지 설정
     st.set_page_config(layout=UI_CONFIG["page_layout"])
     initialize_session_state()
     
-    # 스타일 적용
-    st.markdown("""
-        <style>
-        .target-text {
-            font-size: 24px;
-            background-color: #f8f9fa;
-            padding: 20px;
-            border-radius: 5px;
-            margin: 20px 0;
-        }
-        .stTextInput > div > div > input {
-            font-size: 18px;
-        }
-        .correct {
-            color: #28a745;
-        }
-        .incorrect {
-            color: #dc3545;
-        }
-        .stats {
-            display: flex;
-            gap: 20px;
-            margin: 20px 0;
-            font-size: 16px;
-        }
-        .stats-item {
-            padding: 10px;
-            border-radius: 5px;
-            background-color: #f8f9fa;
-        }
-        </style>
-    """, unsafe_allow_html=True)
+    # 스타일 로드
+    load_styles()
     
     # 입력 방식 선택
     input_method = st.sidebar.radio(
@@ -279,17 +320,11 @@ def main():
         text_input = st.sidebar.text_area(
             "연습할 텍스트를 입력하세요 (각 줄이 하나의 문장이 됩니다)",
             value=get_default_text(),
-            height=200
+            height=UI_CONFIG["text_area_height"]
         )
         
         if 'current_sentences' not in st.session_state:
-            st.markdown("""
-                <div style='text-align: center; padding: 50px;'>
-                    <h2>직접 입력 연습</h2>
-                    <p>연습할 텍스트를 입력하고 '연습시작' 버튼을 클릭하여 시작하세요.</p>
-                    <p>각 줄이 하나의 문장으로 처리됩니다.</p>
-                </div>
-            """, unsafe_allow_html=True)
+            display_welcome_message(input_method)
         else:
             sentences = st.session_state.current_sentences
 
@@ -302,43 +337,42 @@ def main():
         st.session_state.current_language = language
         
         if 'current_sentences' not in st.session_state:
-            st.markdown("""
-                <div style='text-align: center; padding: 50px;'>
-                    <h2>AI 생성 문장 연습</h2>
-                    <p>원하는 언어를 선택하고 '연습시작' 버튼을 클릭하여 시작하세요.</p>
-                    <p>한 번에 5개의 문장이 생성되며, 자동으로 다음 문장 세트가 생성됩니다.</p>
-                </div>
-            """, unsafe_allow_html=True)
+            display_welcome_message(input_method)
         else:
             sentences = st.session_state.current_sentences
 
-    else:  # 파일 업로드
+    elif input_method == "파일 업로드":
+        # 파일 업로더를 한 줄로 표시
         uploaded_file = st.sidebar.file_uploader(
-            "텍스트 파일을 업로드하세요", 
+            "텍스트 파일(.txt)",
             type=FILE_CONFIG["allowed_types"]
         )
-        
-        start_line = st.sidebar.number_input(
-            "시작 문장 위치",
-            min_value=FILE_CONFIG["default_start_line"],
-            value=FILE_CONFIG["default_start_line"]
-        )
-        
-        lines_per_set = st.sidebar.number_input(
-            "연습할 문장 수",
-            min_value=FILE_CONFIG["min_sentences"],
-            max_value=FILE_CONFIG["max_sentences"],
-            value=FILE_CONFIG["default_sentences"]
-        )
-        
+
+        # 시작 위치와 문장 수를 한 줄에 배치
+        col1, col2 = st.sidebar.columns(2)
+        with col1:
+            start_line = st.number_input(
+                "시작 문장",
+                min_value=FILE_CONFIG["default_start_line"],
+                value=FILE_CONFIG["default_start_line"],
+                help="시작할 문장의 위치 (0부터 시작)",
+                label_visibility="collapsed"
+            )
+            st.caption("시작 문장")
+            
+        with col2:
+            lines_per_set = st.number_input(
+                "문장 수",
+                min_value=FILE_CONFIG["min_sentences"],
+                max_value=FILE_CONFIG["max_sentences"],
+                value=FILE_CONFIG["default_sentences"],
+                help="연습할 문장의 수",
+                label_visibility="collapsed"
+            )
+            st.caption("문장 수")
+
         if 'current_sentences' not in st.session_state:
-            st.markdown("""
-                <div style='text-align: center; padding: 50px;'>
-                    <h2>파일 업로드 연습</h2>
-                    <p>텍스트 파일(.txt)을 업로드하고 '연습시작' 버튼을 클릭하여 시작하세요.</p>
-                    <p>시작 위치와 연습할 문장 수를 설정할 수 있습니다.</p>
-                </div>
-            """, unsafe_allow_html=True)
+            display_welcome_message(input_method)
 
         if 'current_sentences' in st.session_state:
             sentences = st.session_state.current_sentences
@@ -394,8 +428,11 @@ def main():
 
     current_sentence = sentences[st.session_state.current_sentence_index]
     
+    # 현재 문장 표시
+    display_sentence(current_sentence)
+    
     # 통계 표시
-    display_stats(st.session_state.stats, len(sentences))
+    display_stats(st.session_state.stats.to_dict(), len(sentences))
         
     # 사이드바에 현재 진행 상황 표시
     st.sidebar.markdown("---")
@@ -405,96 +442,16 @@ def main():
     st.sidebar.markdown(f"전체 문장 수: {total_sentences}")
     st.sidebar.markdown(f"현재 문장: {current_progress}")
 
-    # 현재 문장 표시
-    words_html = ' '.join([
-        f'<span class="word" id="word-{i}">{word}</span>' 
-        for i, word in enumerate(current_sentence.split())
-    ])
-    st.markdown(f'<div class="target-text">{words_html}</div>', unsafe_allow_html=True)
-    
-    # 실시간 타이핑 체크와 자동 포커스를 위한 JavaScript
-    check_script = """
-    <script>
-        function cleanText(text) {
-            return text.trim().replace(/\\s+/g, ' ');
-        }
-
-        function checkTyping() {
-            const doc = window.parent.document;
-            const input = doc.querySelector('input[type="text"]');
-            const words = doc.querySelectorAll('.word');
-            
-            if (!input) return;
-            
-            const inputWords = cleanText(input.value).split(' ');
-            
-            // 모든 단어 스타일 초기화
-            words.forEach(word => {
-                word.classList.remove('correct', 'incorrect');
-            });
-            
-            // 입력된 단어 체크
-            inputWords.forEach((word, i) => {
-                if (i < words.length) {
-                    const targetWord = cleanText(words[i].textContent);
-                    const inputWord = cleanText(word);
-                    if (inputWord === targetWord) {
-                        words[i].classList.add('correct');
-                    } else if (inputWord) {
-                        words[i].classList.add('incorrect');
-                    }
-                }
-            });
-        }
-
-        let lastInputKey = '';
-        let currentInput = null;
-
-        function setupTypingInput() {
-            const doc = window.parent.document;
-            const input = doc.querySelector('input[type="text"]');
-            
-            if (!input) return;
-            
-            // 새로운 입력창이 감지되면
-            if (input !== currentInput) {
-                currentInput = input;
-                lastInputKey = input.getAttribute('data-testid') || '';
-                
-                // 이벤트 리스너 설정
-                if (!input.dataset.hasTypingListener) {
-                    input.addEventListener('input', checkTyping);
-                    input.addEventListener('keypress', function(e) {
-                        if (e.key === 'Enter') {
-                            e.preventDefault();
-                            const submitBtn = doc.querySelector('button[kind="primaryFormSubmit"]');
-                            if (submitBtn) submitBtn.click();
-                        }
-                    });
-                    input.dataset.hasTypingListener = 'true';
-                }
-                
-                // 새 문장이 나타났을 때 포커스
-                setTimeout(() => {
-                    input.focus();
-                    checkTyping();
-                }, 100);
-            }
-        }
-
-        // 주기적으로 체크
-        setInterval(() => {
-            setupTypingInput();
-            checkTyping();  // 실시간 체크 추가
-        }, 100);
-
-        // 초기 설정
-        setupTypingInput();
-        checkTyping();
-    </script>
-    """
-    
-    components.html(check_script, height=0)
+    # JavaScript 실시간 체크
+    js_code = Path('static/typing.js').read_text()
+    components.html(
+        f"""
+        <script>
+        {js_code}
+        </script>
+        """,
+        height=0
+    )
     
     # 입력창
     st.text_input(
