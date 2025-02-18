@@ -166,7 +166,7 @@ def handle_input(current_sentence: str):
         if (st.session_state.current_input_method == "AI 생성 문장" and 
             st.session_state.typing_manager.current_index == 0):
             new_sentences = generate_practice_sentences(
-                st.session_state.get('current_language', AI_CONFIG["default_language"]), 
+                st.session_state.current_language,  # 현재 선택된 언어 사용
                 num_sentences=AI_CONFIG["sentences_per_set"]
             )
             st.session_state.typing_manager.load_sentences(new_sentences)
@@ -247,6 +247,8 @@ def main():
             AI_CONFIG["languages"],
             index=AI_CONFIG["languages"].index(AI_CONFIG["default_language"])
         )
+        # 선택된 언어를 session_state에 저장
+        st.session_state.current_language = language
 
     elif input_method == "파일 업로드":
         uploaded_file = st.sidebar.file_uploader(
@@ -299,6 +301,7 @@ def main():
                 st.session_state.typing_manager.load_sentences(sentences)
                 st.session_state.current_sentences = sentences
                 st.session_state.practice_started = True
+                st.session_state.current_language = language  # 현재 언어 저장
 
         else:  # 파일 업로드
             if not uploaded_file:
