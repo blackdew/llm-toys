@@ -62,6 +62,7 @@ def initialize_session_state():
         st.session_state.typing_manager.set_input_method(INPUT_MODES["default"])
         st.session_state.practice_started = False
         st.session_state.current_input_method = INPUT_MODES["default"]
+        st.session_state.input_key = 0  # input_key도 초기화
     
     # 나머지 상태는 typing_manager에서 관리
     update_session_state(st.session_state.typing_manager)
