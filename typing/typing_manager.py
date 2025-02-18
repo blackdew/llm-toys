@@ -48,27 +48,21 @@ class TypingStats:
 
     def update(self, input_words: List[str], target_words: List[str]) -> None:
         """단어 단위로 정확도를 체크하고 통계를 업데이트합니다."""
-        # 현재 문장 완료 시간 기록
         elapsed = time.time() - self.start_time
         self.elapsed_times.append(elapsed)
-        
-        # 다음 문장을 위한 시작 시간 초기화
         self.start_time = time.time()
-        
         self.word_stats.update(input_words, target_words)
 
     def get_wpm(self) -> float:
         """평균 분당 타자 속도를 계산합니다."""
         if not self.elapsed_times:
             return 0.0
-        
         total_time_minutes = sum(self.elapsed_times) / 60
         if total_time_minutes == 0:
             return 0.0
-            
         return round(self.word_stats.total / total_time_minutes, 1)
 
-    def to_dict(self) -> Dict[str, int]:
+    def to_dict(self) -> Dict[str, float]:
         """통계를 딕셔너리 형태로 반환합니다."""
         return {
             'total_words': self.word_stats.total,
@@ -99,7 +93,9 @@ class TypingManager:
         if not sentences:
             raise ValueError("Empty sentences list")
         self.current_sentences = sentences
-        self.reset_session()
+        # 세션 상태만 초기화하고 통계는 유지
+        self.current_index = 0
+        self.input_key = 0
 
     def get_current_sentence(self) -> str:
         """현재 문장을 반환합니다. 문장이 없으면 빈 문자열을 반환합니다."""
@@ -154,11 +150,13 @@ class TypingManager:
         """현재 세션의 상태를 초기화합니다."""
         self.current_index = 0
         self.input_key = 0
-        self.stats.reset()
+        # stats는 reset하지 않음
 
     def reset_all(self) -> None:
         """모든 상태를 초기화합니다."""
-        self.reset_session()
+        self.current_index = 0
+        self.input_key = 0
+        self.stats.reset()  # 통계는 여기서만 초기화
         self.current_sentences = []
         self.total_sentences_completed = 0
         self.current_input_method = ""
@@ -183,4 +181,8 @@ class TypingManager:
 
     def set_input_method(self, method: str) -> None:
         """입력 방식을 설정합니다."""
-        self.current_input_method = method 
+        self.current_input_method = method
+
+    def to_dict(self) -> Dict[str, float]:
+        """통계를 딕셔너리 형태로 반환합니다."""
+        return self.stats.to_dict() 

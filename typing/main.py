@@ -5,7 +5,7 @@ import streamlit.components.v1 as components
 from pathlib import Path
 from typing import List, Dict
 from openai import OpenAI
-from typing_manager import TypingManager
+from typing_manager import TypingManager, TypingStats
 from config import (
     DEFAULT_SENTENCES,
     INPUT_MODES,
@@ -14,64 +14,6 @@ from config import (
     UI_CONFIG,
     CSS_CLASSES
 )
-
-class TypingStats:
-    def __init__(self):
-        self.total_words = 0
-        self.correct_words = 0
-        self.incorrect_words = 0
-        self.start_time = time.time()
-        self.elapsed_times = []  # 각 문장별 소요 시간 저장
-
-    def update(self, input_words: List[str], target_words: List[str]):
-        # 현재 문장 완료 시간 기록
-        elapsed = time.time() - self.start_time
-        self.elapsed_times.append(elapsed)
-        
-        # 다음 문장을 위한 시작 시간 초기화
-        self.start_time = time.time()
-        
-        self.total_words += len(target_words)
-        
-        # 입력된 단어 체크
-        for i, word in enumerate(input_words):
-            if i < len(target_words):
-                if word == target_words[i]:
-                    self.correct_words += 1
-                else:
-                    self.incorrect_words += 1
-            else:
-                self.incorrect_words += 1
-        
-        # 누락된 단어 처리
-        if len(input_words) < len(target_words):
-            self.incorrect_words += (len(target_words) - len(input_words))
-
-    def get_wpm(self) -> float:
-        """평균 분당 타자 속도를 계산합니다."""
-        if not self.elapsed_times:
-            return 0.0
-        
-        total_time_minutes = sum(self.elapsed_times) / 60
-        if total_time_minutes == 0:
-            return 0.0
-            
-        return round(self.total_words / total_time_minutes, 1)
-
-    def get_accuracy(self) -> float:
-        """정확도를 계산합니다."""
-        if self.total_words == 0:
-            return 0.0
-        return round((self.correct_words / self.total_words) * 100, 1)
-
-    def to_dict(self) -> Dict[str, float]:
-        return {
-            'total_words': self.total_words,
-            'correct_words': self.correct_words,
-            'incorrect_words': self.incorrect_words,
-            'wpm': self.get_wpm(),
-            'accuracy': self.get_accuracy()
-        }
 
 def load_template(template_path: str) -> str:
     """HTML 템플릿 파일을 로드합니다."""
@@ -114,8 +56,6 @@ def initialize_session_state():
         st.session_state.current_sentence_index = 0
     if 'input_key' not in st.session_state:
         st.session_state.input_key = 0
-    if 'stats' not in st.session_state:
-        st.session_state.stats = TypingStats()
     if 'current_sentences' not in st.session_state:
         st.session_state.current_sentences = []
     if 'total_sentences_completed' not in st.session_state:
@@ -140,23 +80,45 @@ def initialize_session_state():
         st.session_state.current_sentence_index < 0):
         st.session_state.current_sentence_index = 0
 
-def display_stats(stats: Dict, current_sentences: int):
-    """통계를 표시합니다."""
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
+def display_progress(current_index: int, total_completed: int, total_sentences: int):
+    """진행 상황을 표시합니다."""
+    current = current_index + 1 + total_completed
+    total = total_sentences + total_completed
+    progress_pct = (current / total) * 100 if total > 0 else 0
+    
+    st.progress(progress_pct / 100)
+    st.markdown(
+        f"<div style='text-align: center; margin-bottom: 20px;'>"
+        f"<h3>진행률: {current} / {total} ({progress_pct:.1f}%)</h3>"
+        f"</div>",
+        unsafe_allow_html=True
+    )
+
+def display_typing_stats(stats: Dict[str, float]):
+    """타이핑 통계를 표시합니다."""
+    col1, col2, col3 = st.columns(3)
+    
     with col1:
-        current_progress = st.session_state.current_sentence_index + 1 + st.session_state.total_sentences_completed
-        total_sentences = current_sentences + st.session_state.total_sentences_completed
-        st.markdown(f"**진행률:** {current_progress} / {total_sentences}")
+        st.metric(
+            label="단어",
+            value=f"{int(stats['correct_words'])} / {int(stats['total_words'])}",
+            delta=f"{stats['accuracy']:.1f}% 정확도"
+        )
+    
     with col2:
-        st.markdown(f"**전체 단어:** {stats['total_words']}")
+        st.metric(
+            label="오타",
+            value=int(stats['incorrect_words']),
+            delta="틀린 단어 수",
+            delta_color="inverse"
+        )
+    
     with col3:
-        st.markdown(f"**정확한 단어:** {stats['correct_words']}")
-    with col4:
-        st.markdown(f"**틀린 단어:** {stats['incorrect_words']}")
-    with col5:
-        st.markdown(f"**타자 속도:** {stats['wpm']} WPM")
-    with col6:
-        st.markdown(f"**정확도:** {stats['accuracy']}%")
+        st.metric(
+            label="타자 속도",
+            value=f"{stats['wpm']:.1f}",
+            delta="WPM (분당 단어 수)"
+        )
 
 def display_sentence(sentence: str):
     """현재 문장을 표시합니다."""
@@ -226,7 +188,6 @@ def handle_input(current_sentence: str):
         # 상태 업데이트
         st.session_state.current_sentence_index = st.session_state.typing_manager.current_index
         st.session_state.input_key = st.session_state.typing_manager.input_key
-        st.session_state.stats = st.session_state.typing_manager.stats
         st.session_state.total_sentences_completed = st.session_state.typing_manager.total_sentences_completed
         
         # 새 입력창 초기화
@@ -298,7 +259,6 @@ def main():
         st.session_state.typing_manager.set_input_method(input_method)
         st.session_state.current_sentence_index = 0
         st.session_state.input_key = 0
-        st.session_state.stats = TypingStats()
         st.session_state.total_sentences_completed = 0
         st.session_state.current_sentences = []
         st.session_state.practice_started = False
@@ -390,7 +350,6 @@ def main():
         # 공통 초기화
         st.session_state.current_sentence_index = 0
         st.session_state.input_key = 0
-        st.session_state.stats = TypingStats()
         st.session_state.total_sentences_completed = 0
 
     # 연습이 시작되지 않았으면 환영 메시지만 표시
@@ -405,7 +364,14 @@ def main():
 
     current_sentence = sentences[st.session_state.current_sentence_index]
     display_sentence(current_sentence)
-    display_stats(st.session_state.stats.to_dict(), len(sentences))
+    
+    # 진행률과 통계 표시
+    display_progress(
+        st.session_state.current_sentence_index,
+        st.session_state.total_sentences_completed,
+        len(sentences)
+    )
+    display_typing_stats(st.session_state.typing_manager.stats.to_dict())
 
     # JavaScript 실시간 체크
     js_code = Path('static/typing.js').read_text()
