@@ -56,7 +56,6 @@ FILE_CONFIG = {
 # UI 설정
 UI_CONFIG = {
     "text_area_height": 200,
-    "input_area_height": 100,
     "page_layout": "wide",
     "font_size": {
         "target_text": "24px",
@@ -71,8 +70,7 @@ UI_CONFIG = {
     "padding": {
         "target_text": "20px",
         "stats_item": "10px"
-    },
-    "border_radius": "5px"
+    }
 }
 
 # CSS 클래스 이름
@@ -80,8 +78,5 @@ CSS_CLASSES = {
     "word": "word",
     "correct": "correct",
     "incorrect": "incorrect",
-    "target_text": "target-text",
-    "text_display": "text-display",
-    "stats": "stats",
-    "stats_item": "stats-item"
+    "target_text": "target-text"
 } 

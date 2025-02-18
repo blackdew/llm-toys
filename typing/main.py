@@ -1,11 +1,9 @@
-import time
-import os
 import streamlit as st
 import streamlit.components.v1 as components
 from pathlib import Path
 from typing import List, Dict
 from openai import OpenAI
-from typing_manager import TypingManager, TypingStats
+from typing_manager import TypingManager
 from config import (
     DEFAULT_SENTENCES,
     INPUT_MODES,
@@ -19,38 +17,43 @@ def load_template(template_path: str) -> str:
     """HTML 템플릿 파일을 로드합니다."""
     return Path(template_path).read_text(encoding='utf-8')
 
-def process_input_text(text: str) -> List[str]:
-    """입력된 텍스트를 문장 리스트로 변환합니다."""
-    return [line.strip() for line in text.split('\n') if line.strip()]
-
 def load_javascript() -> str:
     """JavaScript 코드를 별도 파일에서 로드합니다."""
     return Path('static/typing.js').read_text(encoding='utf-8')
 
 def load_styles():
-    """스타일을 로드합니다."""
-    # main.py 파일이 있는 디렉토리를 기준으로 static 폴더 접근
-    css_path = Path(__file__).parent / 'static' / 'styles.css'
-    css_content = css_path.read_text()
-    
-    css_vars = f"""
-    <style>
-    :root {{
-        --target-text-font-size: {UI_CONFIG["font_size"]["target_text"]};
-        --input-text-font-size: {UI_CONFIG["font_size"]["input_text"]};
-        --stats-font-size: {UI_CONFIG["font_size"]["stats"]};
-        --correct-color: {UI_CONFIG["colors"]["correct"]};
-        --incorrect-color: {UI_CONFIG["colors"]["incorrect"]};
-        --background-color: {UI_CONFIG["colors"]["background"]};
-        --target-text-padding: {UI_CONFIG["padding"]["target_text"]};
-        --stats-item-padding: {UI_CONFIG["padding"]["stats_item"]};
-        --border-radius: {UI_CONFIG["border_radius"]};
-    }}
-    {css_content}
-    </style>
-    """
-    
-    st.markdown(css_vars, unsafe_allow_html=True)
+    """CSS 스타일을 로드합니다."""
+    st.markdown(f"""
+        <style>
+        :root {{
+            --correct-color: #28a745;
+            --incorrect-color: #dc3545;
+            --background-color: #f8f9fa;
+        }}
+        
+        .{CSS_CLASSES["word"]} {{
+            display: inline-block;
+            margin-right: 0.5em;
+        }}
+        
+        .{CSS_CLASSES["correct"]} {{
+            color: var(--correct-color);
+        }}
+        
+        .{CSS_CLASSES["incorrect"]} {{
+            color: var(--incorrect-color);
+            text-decoration: underline;
+        }}
+        
+        .{CSS_CLASSES["target_text"]} {{
+            background-color: var(--background-color);
+            padding: {UI_CONFIG["padding"]["target_text"]};
+            font-size: {UI_CONFIG["font_size"]["target_text"]};
+            border-radius: 5px;
+            margin-bottom: 1em;
+        }}
+        </style>
+    """, unsafe_allow_html=True)
 
 def initialize_session_state():
     """세션 상태를 초기화합니다."""
@@ -58,6 +61,7 @@ def initialize_session_state():
         st.session_state.typing_manager = TypingManager()
         st.session_state.typing_manager.set_input_method(INPUT_MODES["default"])
         st.session_state.practice_started = False
+        st.session_state.current_input_method = INPUT_MODES["default"]
     
     # 나머지 상태는 typing_manager에서 관리
     update_session_state(st.session_state.typing_manager)
@@ -189,7 +193,7 @@ def generate_practice_sentences(language: str, num_sentences: int = 5) -> List[s
     )
     
     text = response.choices[0].message.content
-    return process_input_text(text)
+    return st.session_state.typing_manager.process_input_text(text)
 
 def get_default_text() -> str:
     """기본 연습 문장들을 문자열로 반환합니다."""
@@ -280,7 +284,7 @@ def main():
 
         if input_method == "직접 입력":
             if text_input:
-                sentences = process_input_text(text_input)
+                sentences = st.session_state.typing_manager.process_input_text(text_input)
                 st.session_state.typing_manager.load_sentences(sentences)
                 st.session_state.current_sentences = sentences
                 st.session_state.practice_started = True
@@ -290,7 +294,7 @@ def main():
 
         elif input_method == "AI 생성 문장":
             with st.spinner(f"{language} 문장을 생성하는 중..."):
-                sentences = generate_practice_sentences(language, num_sentences=5)
+                sentences = generate_practice_sentences(language, num_sentences=AI_CONFIG["sentences_per_set"])
                 st.session_state.typing_manager.load_sentences(sentences)
                 st.session_state.current_sentences = sentences
                 st.session_state.practice_started = True
@@ -301,7 +305,7 @@ def main():
                 return
                 
             text_content = uploaded_file.getvalue().decode('utf-8')
-            all_sentences = process_input_text(text_content)
+            all_sentences = st.session_state.typing_manager.process_input_text(text_content)
             start_line = min(start_line, len(all_sentences))
             
             end_line = start_line + lines_per_set

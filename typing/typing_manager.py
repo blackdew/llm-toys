@@ -1,7 +1,6 @@
 """타이핑 관련 핵심 로직"""
 import time
 from typing import List, Dict
-from config import DEFAULT_SENTENCES
 from dataclasses import dataclass
 
 @dataclass
