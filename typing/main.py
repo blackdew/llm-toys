@@ -29,7 +29,9 @@ def load_javascript() -> str:
 
 def load_styles():
     """스타일을 로드합니다."""
-    css_content = Path('static/styles.css').read_text()
+    # main.py 파일이 있는 디렉토리를 기준으로 static 폴더 접근
+    css_path = Path(__file__).parent / 'static' / 'styles.css'
+    css_content = css_path.read_text()
     
     css_vars = f"""
     <style>
@@ -374,7 +376,8 @@ def main():
     display_typing_stats(st.session_state.typing_manager.stats.to_dict())
 
     # JavaScript 실시간 체크
-    js_code = Path('static/typing.js').read_text()
+    js_path = Path(__file__).parent / 'static' / 'typing.js'
+    js_code = js_path.read_text()
     components.html(
         f"""
         <script>
