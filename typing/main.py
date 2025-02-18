@@ -95,6 +95,8 @@ def initialize_session_state():
         st.session_state.current_sentences = process_input_text(get_default_text())
     if 'total_sentences_completed' not in st.session_state:
         st.session_state.total_sentences_completed = 0
+    if 'current_input_method' not in st.session_state:
+        st.session_state.current_input_method = "직접 입력"
     
     # 인덱스가 범위를 벗어났는지 확인하고 수정
     if (st.session_state.current_sentence_index >= len(st.session_state.current_sentences) or 
@@ -253,9 +255,7 @@ def main():
     )
 
     # 입력 방식이 변경되면 상태 초기화
-    if 'current_input_method' not in st.session_state:
-        st.session_state.current_input_method = input_method
-    elif st.session_state.current_input_method != input_method:
+    if st.session_state.current_input_method != input_method:
         st.session_state.current_input_method = input_method
         st.session_state.current_sentence_index = 0
         st.session_state.input_key = 0
@@ -263,79 +263,119 @@ def main():
         st.session_state.total_sentences_completed = 0
         if 'current_sentences' in st.session_state:
             del st.session_state.current_sentences
-        if 'current_text' in st.session_state:
-            del st.session_state.current_text
-        if 'current_file' in st.session_state:
-            del st.session_state.current_file
 
-    # 선택된 입력 방식에 따라 문장 로드
+    # 각 모드별 설정
+    sentences = []  # 초기화
+
     if input_method == "직접 입력":
         text_input = st.sidebar.text_area(
             "연습할 텍스트를 입력하세요 (각 줄이 하나의 문장이 됩니다)",
-            value=get_default_text(),  # 기본 텍스트 미리 입력
+            value=get_default_text(),
             height=200
         )
-        if text_input:
-            sentences = process_input_text(text_input)
-            # 새로운 텍스트가 입력되면 세션 상태 초기화
-            if 'current_text' not in st.session_state or st.session_state.current_text != text_input:
-                st.session_state.current_text = text_input
-                st.session_state.current_sentence_index = 0
-                st.session_state.input_key = 0
-                st.session_state.stats = TypingStats()
-                st.session_state.current_sentences = sentences
+        
+        if 'current_sentences' not in st.session_state:
+            st.markdown("""
+                <div style='text-align: center; padding: 50px;'>
+                    <h2>직접 입력 연습</h2>
+                    <p>연습할 텍스트를 입력하고 '연습시작' 버튼을 클릭하여 시작하세요.</p>
+                    <p>각 줄이 하나의 문장으로 처리됩니다.</p>
+                </div>
+            """, unsafe_allow_html=True)
         else:
-            # 빈 입력일 경우 AI 생성 문장으로 돌아감
-            st.sidebar.warning("텍스트가 비어있어 AI 생성 문장을 사용합니다.")
-            st.session_state.current_sentences = generate_practice_sentences("한국어", 4)
             sentences = st.session_state.current_sentences
+
     elif input_method == "AI 생성 문장":
         language = st.sidebar.selectbox(
             "언어 선택",
             ["한국어", "English"],
             index=0
         )
-        # 선택된 언어 저장
         st.session_state.current_language = language
         
-        # 문장 생성 버튼을 항상 표시
-        if st.sidebar.button("새로운 문장 생성"):
-            with st.spinner(f"{language} 문장을 생성하는 중..."):
-                sentences = generate_practice_sentences(language, num_sentences=5)
-                st.session_state.current_sentence_index = 0
-                st.session_state.input_key = 0
-                st.session_state.current_sentences = sentences
+        if 'current_sentences' not in st.session_state:
+            st.markdown("""
+                <div style='text-align: center; padding: 50px;'>
+                    <h2>AI 생성 문장 연습</h2>
+                    <p>원하는 언어를 선택하고 '연습시작' 버튼을 클릭하여 시작하세요.</p>
+                    <p>한 번에 5개의 문장이 생성되며, 자동으로 다음 문장 세트가 생성됩니다.</p>
+                </div>
+            """, unsafe_allow_html=True)
         else:
-            # 문장이 없는 경우
-            if 'current_sentences' not in st.session_state:
-                st.markdown("""
-                    <div style='text-align: center; padding: 50px;'>
-                        <h2>AI 생성 문장 연습</h2>
-                        <p>원하는 언어를 선택하고 '새로운 문장 생성' 버튼을 클릭하여 시작하세요.</p>
-                        <p>한 번에 5개의 문장이 생성되며, 자동으로 다음 문장 세트가 생성됩니다.</p>
-                    </div>
-                """, unsafe_allow_html=True)
-                sentences = []
-                return
-            else:
-                sentences = st.session_state.current_sentences
+            sentences = st.session_state.current_sentences
+
     else:  # 파일 업로드
         uploaded_file = st.sidebar.file_uploader("텍스트 파일을 업로드하세요", type=['txt'])
-        if uploaded_file:
-            text_content = uploaded_file.getvalue().decode('utf-8')
-            sentences = process_input_text(text_content)
-            # 새로운 파일이 업로드되면 세션 상태 초기화
-            if 'current_file' not in st.session_state or st.session_state.current_file != uploaded_file.name:
-                st.session_state.current_file = uploaded_file.name
-                st.session_state.current_sentence_index = 0
-                st.session_state.input_key = 0
-                st.session_state.stats = TypingStats()
-                st.session_state.current_sentences = sentences
-        else:
-            # 파일이 없을 경우 AI 생성 문장으로 돌아감
-            st.sidebar.warning("파일이 없어 AI 생성 문장을 사용합니다.")
-            st.session_state.current_sentences = generate_practice_sentences("한국어", 4)
+        
+        col1, col2 = st.sidebar.columns(2)
+        with col1:
+            start_line = st.number_input(
+                "시작 문장 위치",
+                min_value=0,
+                value=0,
+                help="연습을 시작할 문장의 위치를 지정합니다. (0부터 시작)"
+            )
+        with col2:
+            lines_per_set = st.number_input(
+                "연습할 문장 수",
+                min_value=1,
+                max_value=50,
+                value=10,
+                help="한 번에 연습할 문장의 수를 설정합니다."
+            )
+            
+        if 'current_sentences' not in st.session_state:
+            st.markdown("""
+                <div style='text-align: center; padding: 50px;'>
+                    <h2>파일 업로드 연습</h2>
+                    <p>텍스트 파일(.txt)을 업로드하고 '연습시작' 버튼을 클릭하여 시작하세요.</p>
+                    <p>시작 위치와 연습할 문장 수를 설정할 수 있습니다.</p>
+                </div>
+            """, unsafe_allow_html=True)
+
+        if 'current_sentences' in st.session_state:
             sentences = st.session_state.current_sentences
+
+    # 공통 연습 시작 버튼
+    st.sidebar.markdown("---")
+    if st.sidebar.button("연습 시작", use_container_width=True):
+        # 진행률 초기화
+        st.session_state.current_sentence_index = 0
+        st.session_state.input_key = 0
+        st.session_state.stats = TypingStats()
+        st.session_state.total_sentences_completed = 0
+
+        if input_method == "직접 입력":
+            if text_input:
+                sentences = process_input_text(text_input)
+                st.session_state.current_text = text_input
+                st.session_state.current_sentences = sentences
+            else:
+                st.sidebar.warning("텍스트를 입력해주세요.")
+                return
+
+        elif input_method == "AI 생성 문장":
+            with st.spinner(f"{language} 문장을 생성하는 중..."):
+                sentences = generate_practice_sentences(language, num_sentences=5)
+                st.session_state.current_sentences = sentences
+
+        else:  # 파일 업로드
+            if not uploaded_file:
+                st.sidebar.warning("파일을 업로드해주세요.")
+                return
+                
+            text_content = uploaded_file.getvalue().decode('utf-8')
+            all_sentences = process_input_text(text_content)
+            start_line = min(start_line, len(all_sentences))
+            
+            st.session_state.current_file = uploaded_file.name
+            st.session_state.start_line = start_line
+            st.session_state.lines_per_set = lines_per_set
+            
+            end_line = start_line + lines_per_set
+            sentences = all_sentences[start_line:end_line]
+            st.session_state.current_sentences = sentences
+            st.session_state.remaining_sentences = all_sentences[end_line:]
 
     # 문장이 비어있으면 나머지 UI를 표시하지 않음
     if not sentences:
