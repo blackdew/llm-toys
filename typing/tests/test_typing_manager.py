@@ -61,6 +61,57 @@ class TestTypingStats(unittest.TestCase):
         wpm = self.typing_stats.get_wpm()
         self.assertEqual(wpm, 50.0)  # 분당 50단어
 
+    def test_to_dict_contains_all_required_keys(self):
+        """to_dict 메서드가 모든 필수 키를 포함하는지 테스트합니다."""
+        stats_dict = self.typing_stats.to_dict()
+        required_keys = {
+            'total_words',
+            'correct_words',
+            'incorrect_words',
+            'wpm',
+            'cpm',
+            'accuracy'
+        }
+        
+        # 모든 필수 키가 존재하는지 확인
+        for key in required_keys:
+            self.assertIn(key, stats_dict, f"'{key}' key is missing in stats dictionary")
+            
+        # 모든 값이 숫자형인지 확인
+        for key, value in stats_dict.items():
+            self.assertIsInstance(value, (int, float), f"Value for '{key}' should be numeric")
+
+    def test_to_dict_initial_values(self):
+        """초기 상태의 to_dict 반환값을 테스트합니다."""
+        stats_dict = self.typing_stats.to_dict()
+        
+        # 초기값 확인
+        self.assertEqual(stats_dict['total_words'], 0)
+        self.assertEqual(stats_dict['correct_words'], 0)
+        self.assertEqual(stats_dict['incorrect_words'], 0)
+        self.assertEqual(stats_dict['wpm'], 0.0)
+        self.assertEqual(stats_dict['cpm'], 0.0)
+        self.assertEqual(stats_dict['accuracy'], 0.0)
+
+    def test_to_dict_after_update(self):
+        """업데이트 후의 to_dict 반환값을 테스트합니다."""
+        # 테스트 데이터 설정
+        self.typing_stats.elapsed_times = [60.0]  # 1분
+        self.typing_stats.total_keystrokes = 300  # 300타
+        self.typing_stats.word_stats.total = 50
+        self.typing_stats.word_stats.correct = 45
+        self.typing_stats.word_stats.incorrect = 5
+        
+        stats_dict = self.typing_stats.to_dict()
+        
+        # 업데이트된 값 확인
+        self.assertEqual(stats_dict['total_words'], 50)
+        self.assertEqual(stats_dict['correct_words'], 45)
+        self.assertEqual(stats_dict['incorrect_words'], 5)
+        self.assertEqual(stats_dict['wpm'], 50.0)
+        self.assertEqual(stats_dict['cpm'], 300.0)
+        self.assertEqual(stats_dict['accuracy'], 90.0)
+
 class TestTypingManager(unittest.TestCase):
     def setUp(self):
         self.manager = TypingManager()

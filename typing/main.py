@@ -88,14 +88,14 @@ def display_typing_stats(stats: Dict[str, float]):
     with col1:
         st.metric(
             label="단어",
-            value=f"{int(stats['correct_words'])} / {int(stats['total_words'])}",
-            delta=f"{stats['accuracy']:.1f}% 정확도"
+            value=f"{int(stats.get('correct_words', 0))} / {int(stats.get('total_words', 0))}",
+            delta=f"{stats.get('accuracy', 0.0):.1f}% 정확도"
         )
     
     with col2:
         st.metric(
             label="오타",
-            value=int(stats['incorrect_words']),
+            value=int(stats.get('incorrect_words', 0)),
             delta="틀린 단어 수",
             delta_color="inverse"
         )
@@ -103,14 +103,14 @@ def display_typing_stats(stats: Dict[str, float]):
     with col3:
         st.metric(
             label="분당 단어 수",
-            value=f"{stats['wpm']:.1f}",
+            value=f"{stats.get('wpm', 0.0):.1f}",
             delta="WPM"
         )
     
     with col4:
         st.metric(
             label="분당 타자 수",
-            value=f"{stats['cpm']:.1f}",
+            value=f"{stats.get('cpm', 0.0):.1f}",
             delta="CPM"
         )
 
