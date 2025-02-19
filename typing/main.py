@@ -243,9 +243,10 @@ def main():
 
     if input_method == "직접 입력":
         text_input = st.sidebar.text_area(
-            "연습할 문장 입력 (줄바꿈으로 구분)",
+            "연습할 문장 입력 또는 URL 붙여넣기",
             value=DEFAULT_SENTENCES,
-            height=UI_CONFIG["text_area_height"]
+            height=UI_CONFIG["text_area_height"],
+            help="웹 페이지 URL을 입력하면 해당 페이지의 내용을 가져옵니다."
         )
 
     elif input_method == "AI 생성 문장":
@@ -294,13 +295,19 @@ def main():
 
         if input_method == "직접 입력":
             if text_input:
-                sentences = st.session_state.typing_manager.process_input_text(text_input)
-                st.session_state.typing_manager.load_sentences(sentences)
-                st.session_state.current_sentences = sentences
-                st.session_state.practice_started = True
-            else:
-                st.sidebar.warning("텍스트를 입력해주세요.")
-                return
+                try:
+                    with st.spinner("텍스트 처리 중..."):
+                        sentences = st.session_state.typing_manager.process_input_text(text_input)
+                        if sentences:
+                            st.session_state.typing_manager.load_sentences(sentences)
+                            st.session_state.current_sentences = sentences
+                            st.session_state.practice_started = True
+                        else:
+                            st.sidebar.warning("처리할 텍스트가 없습니다.")
+                except ValueError as e:
+                    st.sidebar.error(str(e))
+                except Exception as e:
+                    st.sidebar.error(f"오류가 발생했습니다: {str(e)}")
 
         elif input_method == "AI 생성 문장":
             with st.spinner(f"{language} 문장을 생성하는 중..."):

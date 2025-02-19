@@ -2,6 +2,10 @@
 import time
 from typing import List, Dict
 from dataclasses import dataclass
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urlparse
+from url_processor import URLProcessor
 
 @dataclass
 class WordStats:
@@ -147,9 +151,10 @@ class TypingManager:
         self.total_sentences_completed = 0
         self.current_input_method = ""
 
-    @staticmethod
-    def process_input_text(text: str) -> List[str]:
+    def process_input_text(self, text: str) -> List[str]:
         """입력된 텍스트를 문장 리스트로 변환"""
+        if URLProcessor.is_url(text):
+            text = URLProcessor.extract_text_from_url(text)
         return [line.strip() for line in text.split('\n') if line.strip()]
 
     def set_input_method(self, method: str) -> None:
