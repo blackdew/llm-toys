@@ -10,6 +10,7 @@
 - **직접 입력**: 사용자가 원하는 텍스트를 직접 입력하여 연습
 - **AI 생성 문장**: GPT를 활용한 한국어/영어 연습 문장 자동 생성
 - **파일 업로드**: 텍스트 파일(.txt)을 업로드하여 연습
+- **웹페이지 가져오기**: URL에서 텍스트를 추출하여 연습
 
 ### 2. 실시간 통계
 - 진행률
@@ -49,6 +50,7 @@ python -m unittest discover typing/tests
 
 # 특정 테스트 파일 실행
 python -m unittest typing/tests/test_typing_manager.py
+python -m unittest typing/tests/test_url_processor.py
 
 # 특정 테스트 클래스 실행
 python -m unittest typing/tests/test_typing_manager.py -k TestTypingStats
@@ -68,13 +70,16 @@ typing/
 ├── main.py           # 메인 애플리케이션
 ├── config.py         # 설정 관리
 ├── typing_manager.py # 타이핑 로직 관리
+├── url_processor.py  # URL 처리 로직
 ├── __init__.py      # 패키지 초기화
 ├── static/
 │   ├── styles.css   # 스타일시트
 │   └── typing.js    # 실시간 타이핑 체크
 ├── tests/
-│   ├── __init__.py  # 테스트 패키지 초기화
-│   └── test_typing_manager.py  # 타이핑 매니저 테스트
+│   ├── __init__.py          # 테스트 패키지 초기화
+│   ├── test_data.py         # 테스트 데이터 정의
+│   ├── test_typing_manager.py  # 타이핑 매니저 테스트
+│   └── test_url_processor.py   # URL 처리 테스트
 └── README.md
 ```
 
@@ -90,6 +95,13 @@ typing/
 - 공백을 기준으로 단어 단위 비교
 - 부분 일치는 오타로 처리
 - 실시간 피드백 제공 (맞은 단어는 초록색, 틀린 단어는 빨간색)
+
+### URL 처리
+- URL 유효성 검증
+- 웹페이지 텍스트 추출
+- HTML 태그 제거
+- 특수문자 필터링
+- 최소 문장 길이 필터링
 
 ## 라이선스
 MIT License 
