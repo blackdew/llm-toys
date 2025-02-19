@@ -83,7 +83,7 @@ def display_progress(current_index: int, total_completed: int, total_sentences: 
 
 def display_typing_stats(stats: Dict[str, float]):
     """타이핑 통계를 표시합니다."""
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         st.metric(
@@ -102,9 +102,16 @@ def display_typing_stats(stats: Dict[str, float]):
     
     with col3:
         st.metric(
-            label="타자 속도",
+            label="분당 단어 수",
             value=f"{stats['wpm']:.1f}",
-            delta="WPM (분당 단어 수)"
+            delta="WPM"
+        )
+    
+    with col4:
+        st.metric(
+            label="분당 타자 수",
+            value=f"{stats['cpm']:.1f}",
+            delta="CPM"
         )
 
 def display_sentence(sentence: str):

@@ -44,22 +44,67 @@ class TypingStats:
         self.word_stats = WordStats()
         self.start_time = time.time()
         self.elapsed_times: List[float] = []
+        self.total_keystrokes = 0
+
+    def count_keystrokes(self, text: str) -> int:
+        """한글/영어 각각의 실제 타자수를 계산합니다."""
+        total_strokes = 0
+        for char in text:
+            if '가' <= char <= '힣':  # 한글인 경우
+                # 초성, 중성, 종성 분해
+                char_code = ord(char) - 0xAC00
+                
+                # 종성이 있는지 확인
+                jong = char_code % 28
+                jung = ((char_code - jong) // 28) % 21
+                cho = ((char_code - jong) // 28) // 21
+                
+                # 실제 타자수 계산
+                strokes = 0
+                if cho >= 0:  # 초성
+                    strokes += 1
+                if jung >= 0:  # 중성
+                    strokes += 1
+                if jong > 0:   # 종성이 있는 경우
+                    strokes += 1
+                
+                total_strokes += strokes
+            else:  # 영어 및 기타 문자
+                total_strokes += 1
+        
+        return total_strokes
 
     def update(self, input_words: List[str], target_words: List[str]) -> None:
         """단어 단위로 정확도를 체크하고 통계를 업데이트합니다."""
         elapsed = time.time() - self.start_time
         self.elapsed_times.append(elapsed)
         self.start_time = time.time()
+        
         self.word_stats.update(input_words, target_words)
+        
+        # 타자수 계산
+        for word in input_words:
+            self.total_keystrokes += self.count_keystrokes(word)
 
-    def get_wpm(self) -> float:
-        """평균 분당 타자 속도를 계산합니다."""
+    def _get_minutes(self) -> float:
+        """경과 시간을 분 단위로 반환합니다."""
         if not self.elapsed_times:
             return 0.0
-        total_time_minutes = sum(self.elapsed_times) / 60
-        if total_time_minutes == 0:
+        return sum(self.elapsed_times) / 60
+
+    def get_cpm(self) -> float:
+        """평균 분당 타자수를 계산합니다."""
+        minutes = self._get_minutes()
+        if minutes == 0:
             return 0.0
-        return round(self.word_stats.total / total_time_minutes, 1)
+        return round(self.total_keystrokes / minutes, 1)
+
+    def get_wpm(self) -> float:
+        """평균 분당 단어 속도를 계산합니다."""
+        minutes = self._get_minutes()
+        if minutes == 0:
+            return 0.0
+        return round(self.word_stats.total / minutes, 1)
 
     def to_dict(self) -> Dict[str, float]:
         """통계를 딕셔너리 형태로 반환합니다."""
@@ -68,6 +113,7 @@ class TypingStats:
             'correct_words': self.word_stats.correct,
             'incorrect_words': self.word_stats.incorrect,
             'wpm': self.get_wpm(),
+            'cpm': self.get_cpm(),
             'accuracy': self.word_stats.accuracy
         }
 
@@ -76,6 +122,7 @@ class TypingStats:
         self.word_stats.reset()
         self.start_time = time.time()
         self.elapsed_times = []
+        self.total_keystrokes = 0
 
 class TypingManager:
     """타이핑 세션을 관리하는 클래스"""
@@ -87,30 +134,45 @@ class TypingManager:
         self.input_key = 0
         self.current_input_method = ""
 
+    def reset_session(self) -> None:
+        """현재 세션의 상태를 초기화합니다."""
+        self.current_index = 0
+        self.input_key = 0
+
+    def reset_all(self) -> None:
+        """모든 상태를 초기화합니다."""
+        self.reset_session()
+        self.stats.reset()
+        self.current_sentences = []
+        self.total_sentences_completed = 0
+        self.current_input_method = ""
+
+    @staticmethod
+    def process_input_text(text: str) -> List[str]:
+        """입력된 텍스트를 문장 리스트로 변환"""
+        return [line.strip() for line in text.split('\n') if line.strip()]
+
+    def set_input_method(self, method: str) -> None:
+        """입력 방식을 설정합니다."""
+        self.current_input_method = method
+
     def load_sentences(self, sentences: List[str]) -> None:
         """문장 목록을 로드하고 초기 상태를 설정합니다."""
         if not sentences:
             raise ValueError("Empty sentences list")
         self.current_sentences = sentences
-        # 세션 상태만 초기화하고 통계는 유지
-        self.current_index = 0
-        self.input_key = 0
+        self.reset_session()
 
     def get_current_sentence(self) -> str:
-        """현재 문장을 반환합니다. 문장이 없으면 빈 문자열을 반환합니다."""
-        if not self.current_sentences:
-            return ""
-        if self.current_index >= len(self.current_sentences):
+        """현재 문장을 반환합니다."""
+        if not self.current_sentences or self.current_index >= len(self.current_sentences):
             return ""
         return self.current_sentences[self.current_index]
 
     def handle_input(self, input_text: str) -> bool:
         """사용자 입력을 처리하고 성공 여부를 반환합니다."""
-        if not input_text or not self.current_sentences:
-            return False
-
         current_sentence = self.get_current_sentence()
-        if not current_sentence:
+        if not input_text or not current_sentence:
             return False
 
         # 통계 업데이트
@@ -118,7 +180,6 @@ class TypingManager:
         target_words = current_sentence.split()
         self.stats.update(input_words, target_words)
 
-        # 다음 문장으로 이동
         return self.move_to_next()
 
     def move_to_next(self) -> bool:
@@ -129,36 +190,16 @@ class TypingManager:
         next_index = self.current_index + 1
         is_set_completed = next_index >= len(self.current_sentences)
         
-        # 현재 세트 완료 처리
         if is_set_completed:
             self.total_sentences_completed += len(self.current_sentences)
-            
-            # AI 생성 문장 모드인 경우
             if self.current_input_method == "AI 생성 문장":
-                return True  # 새로운 문장 생성이 필요함을 알림
-            
-            # 일반 모드인 경우
+                return True
             self.current_index = 0
         else:
             self.current_index = next_index
 
         self.input_key += 1
         return True
-
-    def reset_session(self) -> None:
-        """현재 세션의 상태를 초기화합니다."""
-        self.current_index = 0
-        self.input_key = 0
-        # stats는 reset하지 않음
-
-    def reset_all(self) -> None:
-        """모든 상태를 초기화합니다."""
-        self.current_index = 0
-        self.input_key = 0
-        self.stats.reset()  # 통계는 여기서만 초기화
-        self.current_sentences = []
-        self.total_sentences_completed = 0
-        self.current_input_method = ""
 
     def get_progress(self) -> Dict[str, int]:
         """현재 진행 상황을 반환합니다."""
@@ -169,18 +210,9 @@ class TypingManager:
         }
 
     @staticmethod
-    def process_input_text(text: str) -> List[str]:
-        """입력된 텍스트를 문장 리스트로 변환"""
-        return [line.strip() for line in text.split('\n') if line.strip()]
-
-    @staticmethod
     def get_default_text() -> str:
         """기본 연습 문장 반환"""
         return DEFAULT_SENTENCES
-
-    def set_input_method(self, method: str) -> None:
-        """입력 방식을 설정합니다."""
-        self.current_input_method = method
 
     def to_dict(self) -> Dict[str, float]:
         """통계를 딕셔너리 형태로 반환합니다."""
