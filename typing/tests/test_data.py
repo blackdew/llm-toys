@@ -1,6 +1,6 @@
 """테스트 데이터"""
 from dataclasses import dataclass
-from typing import List, Dict, Tuple, Union, Literal
+from typing import List, Dict, Literal
 import requests
 
 @dataclass
@@ -31,7 +31,6 @@ class TestData:
     html: HTMLTestData
     errors: List[ErrorTestData]
 
-# HTML 테스트 컨텐츠
 HTML_CONTENT = """
 <html><body>
     <header>Header text that should be excluded</header>
