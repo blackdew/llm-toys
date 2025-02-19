@@ -196,5 +196,107 @@ class TestTypingManager(unittest.TestCase):
         sentences = self.manager.process_input_text(text)
         self.assertEqual(sentences, [])
 
+    def test_process_input_text_with_url(self):
+        """URL 입력 처리 테스트"""
+        test_url = "https://example.com"
+        test_content = "First paragraph\nSecond paragraph"
+        
+        with patch('url_processor.URLProcessor.is_url') as mock_is_url, \
+             patch('url_processor.URLProcessor.extract_text_from_url') as mock_extract:
+            # URL 인식 테스트
+            mock_is_url.return_value = True
+            mock_extract.return_value = test_content
+            
+            result = self.manager.process_input_text(test_url)
+            
+            mock_is_url.assert_called_once_with(test_url)
+            mock_extract.assert_called_once_with(test_url)
+            self.assertEqual(result, ["First paragraph", "Second paragraph"])
+
+    def test_process_input_text_with_normal_text(self):
+        """일반 텍스트 입력 처리 테스트"""
+        test_text = "First line\nSecond line\n\nThird line"
+        result = self.manager.process_input_text(test_text)
+        self.assertEqual(result, ["First line", "Second line", "Third line"])
+
+    def test_process_input_text_with_empty_lines(self):
+        """빈 줄이 포함된 텍스트 처리 테스트"""
+        test_text = "\n\n  \nValid line\n  \n  Another line  \n\n"
+        result = self.manager.process_input_text(test_text)
+        self.assertEqual(result, ["Valid line", "Another line"])
+
+    def test_process_input_text_with_empty_input(self):
+        """빈 입력 처리 테스트"""
+        test_cases = ["", "   ", "\n", "\t", None]
+        for test_input in test_cases:
+            with self.subTest(test_input=test_input):
+                if test_input is None:
+                    with self.assertRaises(AttributeError):
+                        self.manager.process_input_text(test_input)
+                else:
+                    result = self.manager.process_input_text(test_input)
+                    self.assertEqual(result, [])
+
+    def test_handle_input_with_url_content(self):
+        """URL에서 가져온 컨텐츠 입력 처리 테스트"""
+        test_sentences = [
+            "First sentence from URL",
+            "Second sentence from URL"
+        ]
+        self.manager.load_sentences(test_sentences)
+        
+        # 첫 번째 문장 테스트
+        result = self.manager.handle_input("First sentence from URL")
+        self.assertTrue(result)
+        self.assertEqual(self.manager.stats.word_stats.total, 4)
+        self.assertEqual(self.manager.stats.word_stats.correct, 4)
+        self.assertEqual(self.manager.stats.word_stats.incorrect, 0)
+        
+        # 두 번째 문장 테스트
+        result = self.manager.handle_input("Second sentence from URL")
+        self.assertTrue(result)
+        self.assertEqual(self.manager.stats.word_stats.total, 8)  # 누적 총 단어 수
+        self.assertEqual(self.manager.stats.word_stats.correct, 8)  # 누적 정확한 단어 수
+        self.assertEqual(self.manager.stats.word_stats.incorrect, 0)  # 누적 틀린 단어 수
+
+    def test_load_sentences_with_url_content(self):
+        """URL 컨텐츠 로드 테스트"""
+        test_sentences = [
+            "First sentence from URL",
+            "Second sentence from URL",
+            "Third sentence from URL"
+        ]
+        
+        self.manager.load_sentences(test_sentences)
+        self.assertEqual(self.manager.current_sentences, test_sentences)
+        self.assertEqual(self.manager.current_index, 0)
+        self.assertEqual(self.manager.input_key, 0)
+
+    def test_get_progress_with_url_content(self):
+        """URL 컨텐츠 진행 상황 테스트"""
+        test_sentences = [
+            "First sentence from URL",
+            "Second sentence from URL"
+        ]
+        self.manager.load_sentences(test_sentences)
+        
+        # 초기 상태
+        progress = self.manager.get_progress()
+        self.assertEqual(progress['current_index'], 1)
+        self.assertEqual(progress['total_sentences'], 2)
+        self.assertEqual(progress['completed_sentences'], 0)
+        
+        # 첫 번째 문장 완료 후
+        self.manager.handle_input("First sentence from URL")
+        progress = self.manager.get_progress()
+        self.assertEqual(progress['current_index'], 2)
+        self.assertEqual(progress['completed_sentences'], 0)
+        
+        # 두 번째 문장 완료 후
+        self.manager.handle_input("Second sentence from URL")
+        progress = self.manager.get_progress()
+        self.assertEqual(progress['current_index'], 1)
+        self.assertEqual(progress['completed_sentences'], 2)
+
 if __name__ == '__main__':
     unittest.main() 
