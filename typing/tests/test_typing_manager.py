@@ -1,6 +1,10 @@
 import unittest
+from unittest.mock import patch, Mock  # unittest.mock 대신 직접 import
 import os
 import sys
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urlparse
 
 # 프로젝트 루트 디렉토리를 Python 경로에 추가
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -179,6 +183,18 @@ class TestTypingManager(unittest.TestCase):
         self.manager.current_index = len(sentences) - 1
         result = self.manager.move_to_next()
         self.assertTrue(result)  # AI 모드에서는 문장 세트 완료 시 True 반환
+
+    def test_process_input_text_normal(self):
+        """일반 텍스트 처리 테스트"""
+        text = "First line\nSecond line\n\nThird line"
+        sentences = self.manager.process_input_text(text)
+        self.assertEqual(sentences, ["First line", "Second line", "Third line"])
+
+    def test_process_input_text_empty(self):
+        """빈 텍스트 처리 테스트"""
+        text = "\n\n   \n"
+        sentences = self.manager.process_input_text(text)
+        self.assertEqual(sentences, [])
 
 if __name__ == '__main__':
     unittest.main() 
